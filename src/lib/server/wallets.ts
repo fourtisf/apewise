@@ -46,8 +46,19 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
     }
   }
 
+  let birdeye: SmartWallet[] = [];
+  if (process.env.BIRDEYE_API_KEY) {
+    try {
+      const { getBirdeyeSmartWallets } = await import("./birdeye");
+      birdeye = await getBirdeyeSmartWallets(50);
+    } catch {
+      birdeye = [];
+    }
+  }
+
   const map = new Map<string, SmartWallet>();
   for (const w of gmgn) map.set(w.address, w);
+  for (const w of birdeye) map.set(w.address, w);
   for (const w of manual) map.set(w.address, w);
 
   cache = [...map.values()];

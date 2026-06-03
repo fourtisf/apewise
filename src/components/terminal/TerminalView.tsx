@@ -154,6 +154,8 @@ export function TerminalView() {
     .slice(0, 18);
 
   const mkt = source === "market";
+  const volumeLeaderboard =
+    (wallets[0] as { volumeUsd?: number } | undefined)?.volumeUsd != null;
   const kpiCards = kpis
     ? [
         {
@@ -423,7 +425,7 @@ export function TerminalView() {
             <div className="glass overflow-hidden">
               <div className="border-b border-[var(--border)] px-5 py-3.5">
                 <span className="font-display text-sm font-semibold text-text">
-                  {mkt ? "Top Traders · live" : "Top Smart Wallets · 7d"}
+                  {volumeLeaderboard ? "Top Traders · live" : "Top Smart Wallets · 7d"}
                 </span>
               </div>
               {!walletsLive && source === "market" ? (
@@ -463,7 +465,9 @@ export function TerminalView() {
                           <div className="font-mono text-[0.65rem] text-text-muted">
                             {vol != null
                               ? `${w.trades} trades · live`
-                              : `${w.winRate}% win · ${w.trades} trades`}
+                              : w.winRate > 0
+                                ? `${w.winRate}% win · ${w.trades} trades`
+                                : `${w.trades} trades · 7d`}
                           </div>
                         </div>
                       </div>

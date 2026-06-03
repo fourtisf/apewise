@@ -3,6 +3,7 @@ import { allEvents, type SmartEvent } from "@/lib/server/store";
 import { scoreWallets } from "@/lib/server/score";
 import { getMarketSnapshot } from "@/lib/server/marketLive";
 import { getGmgnTopWallets } from "@/lib/server/gmgn";
+import { getTopTraders } from "@/lib/server/birdeye";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,17 +112,30 @@ export async function GET() {
       trades: number;
       volumeUsd?: number;
     };
-    let topWallets: Lb[] = (await getGmgnTopWallets(6)).map((w) => ({
-      wallet:
-        w.address.length > 9
-          ? `${w.address.slice(0, 4)}…${w.address.slice(-4)}`
-          : w.address,
-      segment: w.segment,
-      winRate: w.winRate,
-      pnlUsd: w.pnlUsd,
-      trades: w.trades,
+    const short = (a: string) =>
+      a.length > 9 ? `${a.slice(0, 4)}…${a.slice(-4)}` : a;
+
+    // 1) Birdeye (PnL-ranked smart money; free key, no Cloudflare).
+    let topWallets: Lb[] = (await getTopTraders(6)).map((tr) => ({
+      wallet: short(tr.address),
+      segment: "smart",
+      winRate: 0,
+      pnlUsd: tr.pnlUsd,
+      trades: tr.trades,
     }));
 
+    // 2) GMGN (often Cloudflare-blocked server-side).
+    if (topWallets.length === 0) {
+      topWallets = (await getGmgnTopWallets(6)).map((w) => ({
+        wallet: short(w.address),
+        segment: w.segment,
+        winRate: w.winRate,
+        pnlUsd: w.pnlUsd,
+        trades: w.trades,
+      }));
+    }
+
+    // 3) Live-volume fallback (always works from the market feed).
     if (topWallets.length === 0) {
       const agg = new Map<
         string,

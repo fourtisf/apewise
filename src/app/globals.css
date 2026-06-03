@@ -9,13 +9,13 @@
    DESIGN TOKENS  (signed-off prototype values)
    ============================================================ */
 :root {
-  --bg: #13151c; /* premium charcoal — clearly lifted off pure black so it reads as a real change */
-  --surface: #1d2029;
-  --surface-2: #272b36;
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --text: #eceef2;
-  --text-muted: #9aa1ad;
+  --bg: #0a0c12; /* deep premium dark with a faint cool undertone (Nansen-grade) */
+  --surface: #12151e;
+  --surface-2: #1a1e2a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #f0f2f6;
+  --text-muted: #8b93a3;
   --accent: #22e5a4; /* smart-money green */
   --accent-2: #7c5cff; /* AI violet */
   --red: #ff7a7a;
@@ -87,7 +87,7 @@
     border: 2px solid var(--bg);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #333a48;
+    background: #2a3142;
   }
 }
 
@@ -105,13 +105,20 @@
 
   /* Glassmorphism card */
   .glass {
-    /* More opaque surface + smaller blur = same look, far cheaper on the GPU
-       (backdrop-filter is recomputed on every scroll frame). */
-    background: color-mix(in srgb, var(--surface) 82%, transparent);
-    backdrop-filter: blur(10px) saturate(115%);
-    -webkit-backdrop-filter: blur(10px) saturate(115%);
+    /* Premium elevated panel: top-lit gradient + inner highlight + soft drop
+       shadow give real depth. Modest blur keeps it cheap on the GPU. */
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface) 94%, transparent),
+      color-mix(in srgb, var(--surface) 80%, transparent)
+    );
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+      0 12px 36px -18px rgba(0, 0, 0, 0.75);
   }
 
   .kicker {
@@ -176,19 +183,21 @@
   background:
     radial-gradient(
       40rem 30rem at 15% -5%,
-      color-mix(in srgb, var(--accent) 16%, transparent),
-      transparent 60%
+      color-mix(in srgb, var(--accent) 20%, transparent),
+      transparent 58%
     ),
     radial-gradient(
       42rem 32rem at 95% 0%,
-      color-mix(in srgb, var(--accent-2) 18%, transparent),
-      transparent 60%
+      color-mix(in srgb, var(--accent-2) 22%, transparent),
+      transparent 58%
     ),
     radial-gradient(
-      50rem 40rem at 50% 110%,
-      color-mix(in srgb, var(--accent-2) 10%, transparent),
+      54rem 42rem at 50% 112%,
+      color-mix(in srgb, var(--accent-2) 12%, transparent),
       transparent 60%
-    );
+    ),
+    /* depth vignette — premium darks fade toward the edges/bottom */
+    linear-gradient(180deg, transparent 58%, rgba(0, 0, 0, 0.38) 100%);
 }
 
 /* soft floating glow blobs */

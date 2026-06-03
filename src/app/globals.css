@@ -9,13 +9,13 @@
    DESIGN TOKENS  (signed-off prototype values)
    ============================================================ */
 :root {
-  --bg: #0b0e14; /* refined ink — softer & more premium than pure black */
-  --surface: #141821;
-  --surface-2: #1b212b;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.13);
-  --text: #e6e8ec;
-  --text-muted: #9aa3af;
+  --bg: #13151c; /* premium charcoal — clearly lifted off pure black so it reads as a real change */
+  --surface: #1d2029;
+  --surface-2: #272b36;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --text: #eceef2;
+  --text-muted: #9aa1ad;
   --accent: #22e5a4; /* smart-money green */
   --accent-2: #7c5cff; /* AI violet */
   --red: #ff7a7a;
@@ -87,7 +87,7 @@
     border: 2px solid var(--bg);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #28303d;
+    background: #333a48;
   }
 }
 

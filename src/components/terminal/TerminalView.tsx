@@ -423,7 +423,7 @@ export function TerminalView() {
             <div className="glass overflow-hidden">
               <div className="border-b border-[var(--border)] px-5 py-3.5">
                 <span className="font-display text-sm font-semibold text-text">
-                  Top Smart Wallets · 7d
+                  {mkt ? "Top Traders · live" : "Top Smart Wallets · 7d"}
                 </span>
               </div>
               {!walletsLive && source === "market" ? (
@@ -441,6 +441,7 @@ export function TerminalView() {
                   ))}
                 {wallets.map((w, i) => {
                   const seg = SEGMENTS[w.segment];
+                  const vol = (w as { volumeUsd?: number }).volumeUsd;
                   return (
                     <li
                       key={w.wallet}
@@ -452,7 +453,7 @@ export function TerminalView() {
                         </span>
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ background: seg.color }}
+                          style={{ background: mkt ? "var(--text-muted)" : seg.color }}
                           title={seg.label}
                         />
                         <div className="min-w-0">
@@ -460,12 +461,21 @@ export function TerminalView() {
                             {w.wallet}
                           </div>
                           <div className="font-mono text-[0.65rem] text-text-muted">
-                            {w.winRate}% win · {w.trades} trades
+                            {vol != null
+                              ? `${w.trades} trades · live`
+                              : `${w.winRate}% win · ${w.trades} trades`}
                           </div>
                         </div>
                       </div>
-                      <span className="shrink-0 font-mono text-sm font-medium tabular-nums text-accent">
-                        +{formatUsd(w.pnlUsd)}
+                      <span
+                        className={cn(
+                          "shrink-0 font-mono text-sm font-medium tabular-nums",
+                          vol != null ? "text-text" : "text-accent",
+                        )}
+                      >
+                        {vol != null
+                          ? formatUsd(vol)
+                          : `+${formatUsd(w.pnlUsd)}`}
                       </span>
                     </li>
                   );

@@ -100,9 +100,18 @@ export async function GET() {
   const market = await getMarketSnapshot();
   if (market && market.length > 0) {
     const { feed, kpis, inflows } = derive(market);
-    // Real smart-money leaderboard sourced from GMGN (falls back to [] if blocked).
-    const gmgn = await getGmgnTopWallets(6);
-    const topWallets = gmgn.map((w) => ({
+
+    // Prefer GMGN's smart-money leaderboard; if GMGN is blocked (Cloudflare),
+    // rank the live traders by volume so the panel still shows real data.
+    type Lb = {
+      wallet: string;
+      segment: string;
+      winRate: number;
+      pnlUsd: number;
+      trades: number;
+      volumeUsd?: number;
+    };
+    let topWallets: Lb[] = (await getGmgnTopWallets(6)).map((w) => ({
       wallet:
         w.address.length > 9
           ? `${w.address.slice(0, 4)}…${w.address.slice(-4)}`
@@ -112,6 +121,35 @@ export async function GET() {
       pnlUsd: w.pnlUsd,
       trades: w.trades,
     }));
+
+    if (topWallets.length === 0) {
+      const agg = new Map<
+        string,
+        { vol: number; trades: number; short: string }
+      >();
+      for (const e of market) {
+        const a = agg.get(e.wallet) || {
+          vol: 0,
+          trades: 0,
+          short: e.walletShort,
+        };
+        a.vol += e.amountUsd;
+        a.trades++;
+        agg.set(e.wallet, a);
+      }
+      topWallets = [...agg.values()]
+        .map((a) => ({
+          wallet: a.short,
+          segment: "smart",
+          winRate: 0,
+          pnlUsd: 0,
+          trades: a.trades,
+          volumeUsd: Math.round(a.vol),
+        }))
+        .sort((x, y) => (y.volumeUsd || 0) - (x.volumeUsd || 0))
+        .slice(0, 6);
+    }
+
     return NextResponse.json({
       live: true,
       source: "market",

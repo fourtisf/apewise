@@ -17,7 +17,7 @@ export default function OpengraphImage() {
           justifyContent: "space-between",
           padding: 76,
           background:
-            "linear-gradient(135deg, #0a0c12 0%, #0e1322 55%, #0a0c12 100%)",
+            "linear-gradient(135deg, #060608 0%, #0d0d10 55%, #060608 100%)",
           color: "#f0f2f6",
           fontFamily: "sans-serif",
         }}
@@ -28,8 +28,8 @@ export default function OpengraphImage() {
               width: 60,
               height: 60,
               borderRadius: 16,
-              background: "#141821",
-              border: "1px solid #2a3142",
+              background: "#101013",
+              border: "1px solid #26262c",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -38,12 +38,12 @@ export default function OpengraphImage() {
             <svg width="34" height="34" viewBox="0 0 32 32" fill="none">
               <path
                 d="M6 22 L13 15 L17 18 L25 9"
-                stroke="#6ea8ff"
+                stroke="#ededf0"
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              <circle cx="25" cy="9" r="2.6" fill="#6ea8ff" />
+              <circle cx="25" cy="9" r="2.6" fill="#ededf0" />
             </svg>
           </div>
           <div style={{ fontSize: 36, fontWeight: 700 }}>ApeWise</div>
@@ -54,7 +54,7 @@ export default function OpengraphImage() {
             style={{
               fontSize: 26,
               letterSpacing: 4,
-              color: "#6ea8ff",
+              color: "#cfd0d4",
               fontWeight: 600,
             }}
           >

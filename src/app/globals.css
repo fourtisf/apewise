@@ -9,15 +9,15 @@
    DESIGN TOKENS  (signed-off prototype values)
    ============================================================ */
 :root {
-  --bg: #0a0c12; /* deep premium dark with a faint cool undertone (Nansen-grade) */
-  --surface: #12151e;
-  --surface-2: #1a1e2a;
+  --bg: #060608; /* premium near-black, fully neutral (no blue undertone) */
+  --surface: #101013;
+  --surface-2: #18181c;
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #f0f2f6;
-  --text-muted: #8b93a3;
-  --accent: #6ea8ff; /* restrained cool accent (ice-blue) for links / dots / glows */
-  --accent-2: #7e8aa0; /* cool slate */
+  --text: #f2f2f4;
+  --text-muted: #8a8a90;
+  --accent: #ededf0; /* platinum — monochrome accent (no blue) */
+  --accent-2: #70707a; /* neutral grey */
   --red: #ff7a7a;
   --amber: #ffce54;
   --radius: 20px;
@@ -87,7 +87,7 @@
     border: 2px solid var(--bg);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #2a3142;
+    background: #2a2a30;
   }
 }
 

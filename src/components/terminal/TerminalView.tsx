@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -53,6 +53,8 @@ export function TerminalView() {
   const [kpis, setKpis] = useState<TerminalKpis | null>(null);
   const [now, setNow] = useState(0);
   const [filter, setFilter] = useState<SegmentKey | "all">("all");
+  const [live, setLive] = useState(false);
+  const liveRef = useRef(false);
 
   // Populate on mount (client-only) to avoid a hydration mismatch from Math.random.
   useEffect(() => {
@@ -64,14 +66,47 @@ export function TerminalView() {
   }, []);
 
   useEffect(() => {
-    const add = setInterval(
-      () => setFeed((prev) => [makeFeedEvent(), ...prev].slice(0, 40)),
-      2600,
-    );
+    const add = setInterval(() => {
+      if (liveRef.current) return; // real data is flowing — pause the demo generator
+      setFeed((prev) => [makeFeedEvent(), ...prev].slice(0, 40));
+    }, 2600);
     const clock = setInterval(() => setNow(Date.now()), 2000);
     return () => {
       clearInterval(add);
       clearInterval(clock);
+    };
+  }, []);
+
+  // Poll the engine. When real ingested events exist we switch to LIVE and render
+  // them; otherwise we stay in DEMO (mock) so the terminal always looks alive.
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/terminal/feed", { cache: "no-store" });
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (!active) return;
+        if (data.live && Array.isArray(data.events) && data.events.length) {
+          liveRef.current = true;
+          setLive(true);
+          setFeed(data.events as FeedEvent[]);
+          if (data.kpis) setKpis(data.kpis as TerminalKpis);
+          if (Array.isArray(data.inflows) && data.inflows.length)
+            setInflows(data.inflows as TokenInflow[]);
+        } else {
+          liveRef.current = false;
+          setLive(false);
+        }
+      } catch {
+        /* keep demo mode on network errors */
+      }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => {
+      active = false;
+      clearInterval(id);
     };
   }, []);
 
@@ -124,7 +159,7 @@ export function TerminalView() {
               <span className="relative inline-flex h-1.5 w-1.5">
                 <span className="pulse-dot inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
               </span>
-              Sample data · private beta
+              {live ? "Live · on-chain" : "Sample data · private beta"}
             </span>
             <Button href="/#waitlist" size="sm">
               Get live access
@@ -172,6 +207,16 @@ export function TerminalView() {
                 </span>
                 <span className="font-display text-sm font-semibold text-text">
                   Live Smart Money Feed
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.16em]",
+                    live
+                      ? "border-[var(--border-strong)] text-accent"
+                      : "border-[var(--border)] text-text-muted",
+                  )}
+                >
+                  {live ? "Live" : "Demo"}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">

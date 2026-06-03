@@ -137,3 +137,38 @@ A one-shot redeploy script is included as [`deploy.sh`](./deploy.sh):
 ```bash
 ./deploy.sh        # git pull → npm ci → npm run build → pm2 reload apewise
 ```
+
+---
+
+## MVP — smart-money engine (Solana via Helius)
+
+The `/terminal` runs in **DEMO** mode until the engine is wired. Then tracked-wallet
+swaps flow in, the terminal goes **LIVE**, and Telegram alerts fire.
+
+**Flow:** curated wallets → Helius enhanced webhook → `POST /api/ingest/helius`
+→ parse swap → store + alert `@apewisesignals` → `/terminal` polls `GET /api/terminal/feed`.
+
+**Setup (on the server):**
+
+1. Pick the wallets to track:
+   ```bash
+   cp smart-wallets.example.json data/smart-wallets.json   # then edit addresses + segments
+   ```
+2. Set env (`.env`): `HELIUS_API_KEY`, `INGEST_SECRET`, `WEBHOOK_URL`,
+   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_SIGNALS_CHAT_ID` (bot must be admin of the channel),
+   optional `BUY_LINK_TEMPLATE`. Restart: `pm2 restart apewise`.
+3. Register the webhook (one-off):
+   ```bash
+   node scripts/setup-helius-webhook.mjs
+   ```
+
+**Verify locally** with a sample payload (no Helius needed):
+```bash
+curl -s -X POST "http://localhost:3000/api/ingest/helius?secret=$INGEST_SECRET" \
+  -H 'content-type: application/json' --data @sample/helius-swap.json
+curl -s http://localhost:3000/api/terminal/feed | head   # -> "live":true with the event
+```
+
+> **Scope:** wallets are operator-curated (segments assigned per wallet). Automated
+> PnL/win-rate **scoring**, anti-rug fusion and payments are the next milestones —
+> see `// TODO`s in `src/lib/server/`.

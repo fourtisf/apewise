@@ -1,0 +1,6 @@
+[
+  { "address": "REPLACE_WITH_SOLANA_WALLET_ADDRESS_1", "label": "Whale 1", "segment": "smart" },
+  { "address": "REPLACE_WITH_SOLANA_WALLET_ADDRESS_2", "label": "Early sniper", "segment": "sniper" },
+  { "address": "REPLACE_WITH_SOLANA_WALLET_ADDRESS_3", "label": "Insider", "segment": "insider" },
+  { "address": "REPLACE_WITH_SOLANA_WALLET_ADDRESS_4", "label": "KOL wallet", "segment": "kol" }
+]

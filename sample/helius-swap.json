@@ -1,0 +1,38 @@
+[
+  {
+    "signature": "SAMPLEbuySig1111111111111111111111111111111111111111111111111111",
+    "type": "SWAP",
+    "events": {
+      "swap": {
+        "nativeInput": { "account": "SampLeApeWiseWa11etDemo111111111111111111111", "amount": "2500000000" },
+        "nativeOutput": null,
+        "tokenInputs": [],
+        "tokenOutputs": [
+          {
+            "userAccount": "SampLeApeWiseWa11etDemo111111111111111111111",
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "rawTokenAmount": { "tokenAmount": "1234567000000", "decimals": 5 }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "signature": "SAMPLEsellSig222222222222222222222222222222222222222222222222222",
+    "type": "SWAP",
+    "events": {
+      "swap": {
+        "nativeInput": null,
+        "nativeOutput": { "account": "SampLeApeWiseWa11etDemo111111111111111111111", "amount": "1200000000" },
+        "tokenInputs": [
+          {
+            "userAccount": "SampLeApeWiseWa11etDemo111111111111111111111",
+            "mint": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+            "rawTokenAmount": { "tokenAmount": "5000000000", "decimals": 6 }
+          }
+        ],
+        "tokenOutputs": []
+      }
+    }
+  }
+]

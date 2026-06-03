@@ -1,27 +1,13 @@
 import { NextResponse } from "next/server";
-import { allEvents } from "@/lib/server/store";
+import { allEvents, type SmartEvent } from "@/lib/server/store";
 import { scoreWallets } from "@/lib/server/score";
+import { getMarketSnapshot } from "@/lib/server/marketLive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Terminal data source. Returns real, derived metrics when ingested events exist
- * (`live: true`): the feed, KPIs, net inflows, and a PnL-scored wallet
- * leaderboard. Otherwise `live: false` and the client renders demo data.
- */
-export async function GET() {
-  const events = await allEvents();
-  if (events.length === 0) {
-    return NextResponse.json({
-      live: false,
-      events: [],
-      kpis: null,
-      inflows: [],
-      topWallets: [],
-    });
-  }
-
+/** Compute the feed + KPIs + net inflows from a set of events. */
+function derive(events: SmartEvent[]) {
   const now = Date.now();
   const day = events.filter((e) => now - e.ts < 24 * 3600 * 1000);
   const hour = events.filter((e) => now - e.ts < 3600 * 1000);
@@ -38,6 +24,7 @@ export async function GET() {
     amountUsd: e.amountUsd,
     ts: e.ts,
     chain: e.chain,
+    tokenMint: e.tokenMint,
     marketCapUsd: e.marketCapUsd,
     liquidityUsd: e.liquidityUsd,
     riskVerdict: e.risk?.verdict,
@@ -81,13 +68,53 @@ export async function GET() {
     .sort((a, b) => b.netInflowUsd - a.netInflowUsd)
     .slice(0, 6);
 
-  const topWallets = scoreWallets(events, 6).map((w) => ({
-    wallet: w.walletShort,
-    segment: w.segment,
-    winRate: w.winRate,
-    pnlUsd: w.pnlUsd,
-    trades: w.trades,
-  }));
+  return { feed, kpis, inflows };
+}
 
-  return NextResponse.json({ live: true, events: feed, kpis, inflows, topWallets });
+/**
+ * Terminal data: scored smart-money (Helius) when configured, else REAL Solana
+ * market trades (GeckoTerminal, no key), else demo. `source` tells the UI which.
+ */
+export async function GET() {
+  const tracked = await allEvents();
+  if (tracked.length > 0) {
+    const { feed, kpis, inflows } = derive(tracked);
+    const topWallets = scoreWallets(tracked, 6).map((w) => ({
+      wallet: w.walletShort,
+      segment: w.segment,
+      winRate: w.winRate,
+      pnlUsd: w.pnlUsd,
+      trades: w.trades,
+    }));
+    return NextResponse.json({
+      live: true,
+      source: "smart",
+      events: feed,
+      kpis,
+      inflows,
+      topWallets,
+    });
+  }
+
+  const market = await getMarketSnapshot();
+  if (market && market.length > 0) {
+    const { feed, kpis, inflows } = derive(market);
+    return NextResponse.json({
+      live: true,
+      source: "market",
+      events: feed,
+      kpis,
+      inflows,
+      topWallets: [],
+    });
+  }
+
+  return NextResponse.json({
+    live: false,
+    source: "demo",
+    events: [],
+    kpis: null,
+    inflows: [],
+    topWallets: [],
+  });
 }

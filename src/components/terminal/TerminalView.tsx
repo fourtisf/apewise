@@ -76,6 +76,7 @@ export function TerminalView() {
   const [filter, setFilter] = useState<SegmentKey | "all">("all");
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(false);
+  const [source, setSource] = useState<"smart" | "market" | "demo">("demo");
   const liveRef = useRef(false);
 
   // Populate on mount (client-only) to avoid a hydration mismatch from Math.random.
@@ -112,6 +113,7 @@ export function TerminalView() {
         if (data.live && Array.isArray(data.events) && data.events.length) {
           liveRef.current = true;
           setLive(true);
+          setSource(data.source === "market" ? "market" : "smart");
           setFeed(data.events as Row[]);
           if (data.kpis) setKpis(data.kpis as TerminalKpis);
           if (Array.isArray(data.inflows) && data.inflows.length)
@@ -121,6 +123,7 @@ export function TerminalView() {
         } else {
           liveRef.current = false;
           setLive(false);
+          setSource("demo");
         }
       } catch {
         /* keep demo mode on network errors */
@@ -190,7 +193,11 @@ export function TerminalView() {
               <span className="relative inline-flex h-1.5 w-1.5">
                 <span className="pulse-dot inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
               </span>
-              {live ? "Live · on-chain" : "Sample data · private beta"}
+              {source === "smart"
+                ? "Live · smart money"
+                : source === "market"
+                  ? "Live · market"
+                  : "Sample data · private beta"}
             </span>
             <Button href="/#waitlist" size="sm">
               Get live access
@@ -211,6 +218,13 @@ export function TerminalView() {
             aria-label="Search the feed"
           />
         </div>
+
+        {source === "market" && (
+          <div className="mb-5 rounded-xl border border-[var(--border)] bg-[color:color-mix(in_srgb,var(--surface)_45%,transparent)] px-4 py-2.5 text-xs text-text-muted">
+            Showing <span className="text-text">live Solana market trades</span> —
+            connect tracked wallets to score smart money &amp; fire alerts.
+          </div>
+        )}
 
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -243,7 +257,7 @@ export function TerminalView() {
                   <span className="pulse-dot inline-flex h-2 w-2 rounded-full bg-accent" />
                 </span>
                 <span className="font-display text-sm font-semibold text-text">
-                  Live Smart Money Feed
+                  {source === "market" ? "Live Solana Trades" : "Live Smart Money Feed"}
                 </span>
                 <span
                   className={cn(
@@ -315,11 +329,14 @@ export function TerminalView() {
                         <span
                           className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs"
                           style={{
-                            background: `color-mix(in srgb, ${seg.color} 16%, transparent)`,
+                            background:
+                              source === "market"
+                                ? "var(--surface-2)"
+                                : `color-mix(in srgb, ${seg.color} 16%, transparent)`,
                           }}
-                          title={seg.label}
+                          title={source === "market" ? "market trade" : seg.label}
                         >
-                          {seg.emoji}
+                          {source === "market" ? "•" : seg.emoji}
                         </span>
                         <div className="min-w-0">
                           <div className="font-mono text-sm text-text">
@@ -327,9 +344,14 @@ export function TerminalView() {
                           </div>
                           <div
                             className="text-[0.7rem]"
-                            style={{ color: seg.color }}
+                            style={{
+                              color:
+                                source === "market"
+                                  ? "var(--text-muted)"
+                                  : seg.color,
+                            }}
                           >
-                            {seg.label}
+                            {source === "market" ? "trade" : seg.label}
                           </div>
                         </div>
                       </div>
@@ -400,6 +422,12 @@ export function TerminalView() {
                   Top Smart Wallets · 7d
                 </span>
               </div>
+              {source === "market" ? (
+                <div className="px-5 py-8 text-center text-sm leading-relaxed text-text-muted">
+                  Wallet PnL scoring activates with tracked wallets — connect
+                  Helius to rank smart wallets here.
+                </div>
+              ) : (
               <ul>
                 {wallets.length === 0 &&
                   Array.from({ length: 5 }).map((_, i) => (
@@ -439,6 +467,7 @@ export function TerminalView() {
                   );
                 })}
               </ul>
+              )}
             </div>
 
             {/* Token inflows */}

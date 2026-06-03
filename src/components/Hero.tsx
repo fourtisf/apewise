@@ -21,7 +21,7 @@ export function Hero() {
       {/* central hero glow */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-6rem] -z-0 h-[40rem] w-[64rem] -translate-x-1/2 rounded-full opacity-60 blur-[130px]"
+        className="pointer-events-none absolute left-1/2 top-[-6rem] -z-0 h-[40rem] w-[64rem] -translate-x-1/2 rounded-full opacity-50 blur-[100px]"
         style={{
           background:
             "radial-gradient(circle, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%)",

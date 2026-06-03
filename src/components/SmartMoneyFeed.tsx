@@ -38,7 +38,7 @@ export function SmartMoneyFeed() {
     const add = setInterval(() => {
       setEvents((prev) => [makeFeedEvent(), ...prev].slice(0, MAX_ROWS));
     }, 2300);
-    const clock = setInterval(() => setNow(Date.now()), 1000);
+    const clock = setInterval(() => setNow(Date.now()), 2000);
     return () => {
       clearInterval(add);
       clearInterval(clock);

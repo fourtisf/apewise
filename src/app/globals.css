@@ -1,9 +1,6 @@
-/* Fonts — Fontshare (Clash Display + Satoshi) and Google (JetBrains Mono).
-   Loaded via @import because local woff2 files are not bundled in this repo.
-   See README "Fonts" for swapping to self-hosted next/font/local. */
-@import url("https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap");
-
+/* Fonts are loaded via <link rel="preconnect"> + <link rel="stylesheet"> in the
+   root layout <head> (NOT CSS @import) so they fetch in parallel and don't block
+   first paint. See README "Fonts" to self-host the woff2 with next/font/local. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -12,13 +9,13 @@
    DESIGN TOKENS  (signed-off prototype values)
    ============================================================ */
 :root {
-  --bg: #08090a;
-  --surface: #101114;
-  --surface-2: #16181d;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #ecedef;
-  --text-muted: #9aa0a8;
+  --bg: #0b0e14; /* refined ink — softer & more premium than pure black */
+  --surface: #141821;
+  --surface-2: #1b212b;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --text: #e6e8ec;
+  --text-muted: #9aa3af;
   --accent: #22e5a4; /* smart-money green */
   --accent-2: #7c5cff; /* AI violet */
   --red: #ff7a7a;
@@ -90,7 +87,7 @@
     border: 2px solid var(--bg);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #23262d;
+    background: #28303d;
   }
 }
 
@@ -108,9 +105,11 @@
 
   /* Glassmorphism card */
   .glass {
-    background: color-mix(in srgb, var(--surface) 70%, transparent);
-    backdrop-filter: blur(16px) saturate(120%);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    /* More opaque surface + smaller blur = same look, far cheaper on the GPU
+       (backdrop-filter is recomputed on every scroll frame). */
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    backdrop-filter: blur(10px) saturate(115%);
+    -webkit-backdrop-filter: blur(10px) saturate(115%);
     border: 1px solid var(--border);
     border-radius: var(--radius);
   }
@@ -196,16 +195,15 @@
 .bg-glow {
   position: absolute;
   border-radius: 999px;
-  filter: blur(80px);
-  opacity: 0.5;
+  filter: blur(60px);
+  opacity: 0.45;
 }
 
 /* fine grain / noise overlay */
 .bg-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.04;
-  mix-blend-mode: overlay;
+  opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 

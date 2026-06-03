@@ -92,10 +92,11 @@ The app ships **EN**; `id` / `ru` / `ar` / `zh` are scaffolded (`// TODO` comple
 
 ### Fonts
 
-Loaded via `@import` (Fontshare + Google) at the top of `globals.css` because the
-licensed `woff2` files aren't bundled. To self-host for best performance, drop the
-woff2 files in `src/app/fonts/`, switch to `next/font/local`, and remove the
-`@import` lines.
+Loaded via `<link rel="preconnect">` + `<link rel="stylesheet">` in the root
+layout `<head>` (Fontshare + Google) — fetched in parallel so they don't block
+first paint (CSS `@import` did). The licensed `woff2` files aren't bundled. To
+self-host for best performance + zero layout shift, drop the woff2 files in
+`src/app/fonts/`, switch to `next/font/local`, and remove the `<link>` tags.
 
 ### Mock data & stubs (replace before launch)
 

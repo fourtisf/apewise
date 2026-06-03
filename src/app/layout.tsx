@@ -43,14 +43,6 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     title: TITLE,
     description: SITE_DESCRIPTION,
-    images: [
-      {
-        url: "/og.svg",
-        width: 1200,
-        height: 630,
-        alt: "ApeWise — the smart-money tracker for Solana memecoins",
-      },
-    ],
     locale: "en_US",
   },
   twitter: {
@@ -59,7 +51,6 @@ export const metadata: Metadata = {
     creator: `@${X_HANDLE}`,
     title: TITLE,
     description: SITE_DESCRIPTION,
-    images: ["/og.svg"],
   },
   robots: {
     index: true,

@@ -40,6 +40,27 @@ const FILTERS: { key: SegmentKey | "all"; label: string }[] = [
   { key: "kol", label: "KOL" },
 ];
 
+/** Feed row = mock FeedEvent, plus the live-only enrichment fields. */
+type Row = FeedEvent & {
+  chain?: string;
+  tokenMint?: string;
+  marketCapUsd?: number;
+  liquidityUsd?: number;
+  riskVerdict?: "ok" | "caution" | "risk" | "unknown";
+};
+
+const RISK_DOT: Record<string, string> = {
+  ok: "#37d39a",
+  caution: "var(--amber)",
+  risk: "var(--red)",
+};
+
+function tokenHref(e: Row): string {
+  return e.tokenMint
+    ? `https://dexscreener.com/${e.chain || "solana"}/${e.tokenMint}`
+    : `https://dexscreener.com/?q=${encodeURIComponent(e.token)}`;
+}
+
 /**
  * ApeWise Terminal — a premium, live-looking smart-money dashboard.
  * Data is MOCK (sample / private beta). TODO: wire to the real scoring engine
@@ -47,12 +68,13 @@ const FILTERS: { key: SegmentKey | "all"; label: string }[] = [
  */
 export function TerminalView() {
   const reduce = useReducedMotion();
-  const [feed, setFeed] = useState<FeedEvent[]>([]);
+  const [feed, setFeed] = useState<Row[]>([]);
   const [wallets, setWallets] = useState<WalletStat[]>([]);
   const [inflows, setInflows] = useState<TokenInflow[]>([]);
   const [kpis, setKpis] = useState<TerminalKpis | null>(null);
   const [now, setNow] = useState(0);
   const [filter, setFilter] = useState<SegmentKey | "all">("all");
+  const [search, setSearch] = useState("");
   const [live, setLive] = useState(false);
   const liveRef = useRef(false);
 
@@ -90,7 +112,7 @@ export function TerminalView() {
         if (data.live && Array.isArray(data.events) && data.events.length) {
           liveRef.current = true;
           setLive(true);
-          setFeed(data.events as FeedEvent[]);
+          setFeed(data.events as Row[]);
           if (data.kpis) setKpis(data.kpis as TerminalKpis);
           if (Array.isArray(data.inflows) && data.inflows.length)
             setInflows(data.inflows as TokenInflow[]);
@@ -112,9 +134,16 @@ export function TerminalView() {
     };
   }, []);
 
-  const shown = (
-    filter === "all" ? feed : feed.filter((e) => e.segment === filter)
-  ).slice(0, 18);
+  const q = search.trim().toLowerCase();
+  const shown = feed
+    .filter((e) => filter === "all" || e.segment === filter)
+    .filter(
+      (e) =>
+        !q ||
+        e.token.toLowerCase().includes(q) ||
+        e.wallet.toLowerCase().includes(q),
+    )
+    .slice(0, 18);
 
   const kpiCards = kpis
     ? [
@@ -172,9 +201,15 @@ export function TerminalView() {
 
       <main className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6">
         {/* Search (decorative preview) */}
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[color:color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-2.5 text-text-muted">
-          <Search className="h-4 w-4" aria-hidden />
-          <span className="text-sm">Search a token or wallet…</span>
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[color:color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-2.5 focus-within:border-[var(--border-strong)]">
+          <Search className="h-4 w-4 text-text-muted" aria-hidden />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search a token or wallet…"
+            className="w-full bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
+            aria-label="Search the feed"
+          />
         </div>
 
         {/* KPI row */}
@@ -315,9 +350,28 @@ export function TerminalView() {
                         {isBuy ? "Buy" : "Sell"}
                       </span>
 
-                      <span className="hidden font-mono text-sm text-text sm:block">
-                        ${ev.token}
-                      </span>
+                      <div className="hidden min-w-0 sm:block">
+                        <a
+                          href={tokenHref(ev)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 font-mono text-sm text-text transition-colors hover:text-accent"
+                        >
+                          {ev.riskVerdict && ev.riskVerdict !== "unknown" && (
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full"
+                              style={{ background: RISK_DOT[ev.riskVerdict] }}
+                              title={`Anti-rug: ${ev.riskVerdict}`}
+                            />
+                          )}
+                          ${ev.token}
+                        </a>
+                        {ev.marketCapUsd != null && (
+                          <div className="font-mono text-[0.6rem] text-text-muted">
+                            MC {formatUsd(ev.marketCapUsd)}
+                          </div>
+                        )}
+                      </div>
                       <span className="hidden text-right font-mono text-sm tabular-nums text-text sm:block">
                         {formatUsd(ev.amountUsd)}
                       </span>
@@ -328,6 +382,12 @@ export function TerminalView() {
                   );
                 })}
               </AnimatePresence>
+
+              {feed.length > 0 && shown.length === 0 && (
+                <li className="px-5 py-12 text-center text-sm text-text-muted">
+                  No activity matches your search/filter.
+                </li>
+              )}
             </ul>
           </section>
 

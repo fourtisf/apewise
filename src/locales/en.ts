@@ -31,6 +31,7 @@ export const en = {
     sub: "ApeWise scores profitable on-chain wallets and alerts you the second they ape in — segmented, anti-rug fused, and delivered Telegram-native in your language.",
     ctaPrimary: "Get Early Access",
     ctaSecondary: "See how it works",
+    highlights: ["Sub-second Telegram alerts", "Anti-rug fused", "Wallet segments"],
     stats: {
       segments: { value: 4, decimals: 0, suffix: "", label: "Wallet segments" },
       chains: { value: 5, decimals: 0, suffix: "", label: "Chains on the roadmap" },

@@ -16,8 +16,8 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #f0f2f6;
   --text-muted: #8b93a3;
-  --accent: #e8ebf0; /* full-dark monochrome: platinum accent (was neon green) */
-  --accent-2: #8b93a3; /* neutralized cool gray (was AI violet) */
+  --accent: #6ea8ff; /* restrained cool accent (ice-blue) for links / dots / glows */
+  --accent-2: #7e8aa0; /* cool slate */
   --red: #ff7a7a;
   --amber: #ffce54;
   --radius: 20px;
@@ -100,7 +100,7 @@
   }
 
   .section {
-    @apply scroll-mt-24 py-20 sm:py-28;
+    @apply scroll-mt-24 py-24 sm:py-32;
   }
 
   /* Glassmorphism card */

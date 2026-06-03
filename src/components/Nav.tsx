@@ -41,12 +41,15 @@ export function Nav() {
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-colors duration-300",
         scrolled || open
-          ? "border-b border-[var(--border)] bg-[color:color-mix(in_srgb,var(--bg)_80%,transparent)] backdrop-blur-xl"
+          ? "border-b border-[var(--border)] bg-[color:color-mix(in_srgb,var(--bg)_72%,transparent)] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl"
           : "border-b border-transparent",
       )}
     >
       <nav
-        className="container-content flex h-16 items-center justify-between sm:h-20"
+        className={cn(
+          "container-content flex items-center justify-between transition-[height] duration-300",
+          scrolled ? "h-14 sm:h-16" : "h-16 sm:h-20",
+        )}
         aria-label="Primary"
       >
         <a href="#top" className="-m-1 rounded-lg p-1" aria-label={n.brand}>

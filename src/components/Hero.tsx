@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { useStrings } from "@/lib/strings";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -45,7 +45,7 @@ export function Hero() {
             </Reveal>
 
             <Reveal delay={0.06}>
-              <h1 className="headline-sheen mt-6 text-balance text-[2.6rem] font-semibold leading-[1.04] sm:text-6xl lg:text-[4rem]">
+              <h1 className="headline-sheen mt-6 text-balance text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.03em] sm:text-6xl lg:text-[4.25rem]">
                 {h.h1}
               </h1>
             </Reveal>
@@ -66,6 +66,20 @@ export function Hero() {
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Button>
               </div>
+            </Reveal>
+
+            <Reveal delay={0.22}>
+              <ul className="mt-7 flex flex-wrap gap-x-5 gap-y-2">
+                {h.highlights.map((item) => (
+                  <li
+                    key={item}
+                    className="inline-flex items-center gap-1.5 text-sm text-text-muted"
+                  >
+                    <Check className="h-4 w-4 text-accent" aria-hidden />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </Reveal>
 
             <Reveal delay={0.24}>

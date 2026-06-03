@@ -99,8 +99,14 @@ export async function GET() {
   }
 
   const market = await getMarketSnapshot();
-  if (market && market.length > 0) {
-    const { feed, kpis, inflows } = derive(market);
+  if (market && market.events.length > 0) {
+    const { feed, inflows } = derive(market.events);
+    const kpis = {
+      volumeUsd: market.stats.volume24h,
+      activeWallets: market.stats.traders24h,
+      signals24h: market.stats.trades24h,
+      topToken: market.stats.topToken,
+    };
 
     // Prefer GMGN's smart-money leaderboard; if GMGN is blocked (Cloudflare),
     // rank the live traders by volume so the panel still shows real data.
@@ -141,7 +147,7 @@ export async function GET() {
         string,
         { vol: number; trades: number; short: string }
       >();
-      for (const e of market) {
+      for (const e of market.events) {
         const a = agg.get(e.wallet) || {
           vol: 0,
           trades: 0,

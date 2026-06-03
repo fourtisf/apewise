@@ -4,18 +4,33 @@ import type { SmartEvent } from "./store";
  * Live market fallback — when no tracked-wallet (Helius) events exist, show REAL
  * recent Solana trades from GeckoTerminal's free, no-key API so the terminal is
  * never just mock. These are public market trades (NOT scored "smart" wallets) —
- * the UI labels this mode "MARKET" accordingly. Fail-soft + cached.
+ * the UI labels this mode "MARKET". KPIs use real 24h pool aggregates (not the
+ * small trade sample). Fail-soft + cached.
  */
 const BASE = "https://api.geckoterminal.com/api/v2";
 const TTL = 45_000;
 
-let cache: { at: number; events: SmartEvent[] | null } | null = null;
+export interface MarketStats {
+  volume24h: number;
+  trades24h: number;
+  traders24h: number;
+  topToken: string;
+}
+
+export interface MarketSnapshot {
+  events: SmartEvent[];
+  stats: MarketStats;
+}
+
+let cache: { at: number; snap: MarketSnapshot | null } | null = null;
 
 export interface PoolInfo {
   poolAddr: string;
   baseSymbol: string;
   baseMint: string;
   vol24: number;
+  txns24: number;
+  traders24: number;
   mcap?: number;
   liquidity?: number;
   change?: number;
@@ -31,22 +46,44 @@ export function parsePool(p: unknown): PoolInfo | null {
       reserve_in_usd?: string | number;
       volume_usd?: { h24?: string | number };
       price_change_percentage?: { h24?: string | number };
+      transactions?: {
+        h24?: {
+          buys?: string | number;
+          sells?: string | number;
+          buyers?: string | number;
+          sellers?: string | number;
+        };
+      };
     };
     relationships?: { base_token?: { data?: { id?: string } } };
   };
   const a = o?.attributes;
   const baseId = o?.relationships?.base_token?.data?.id || "";
-  const baseMint = baseId.includes("_") ? baseId.split("_").slice(1).join("_") : baseId;
+  const baseMint = baseId.includes("_")
+    ? baseId.split("_").slice(1).join("_")
+    : baseId;
   const symbol = (a?.name || "").split("/")[0]?.trim();
   if (!a?.address || !baseMint || !symbol) return null;
+
+  const tx = a.transactions?.h24;
   return {
     poolAddr: a.address,
     baseSymbol: symbol,
     baseMint,
     vol24: Number(a.volume_usd?.h24 ?? 0) || 0,
-    mcap: a.market_cap_usd != null ? Number(a.market_cap_usd) : a.fdv_usd != null ? Number(a.fdv_usd) : undefined,
+    txns24: Number(tx?.buys ?? 0) + Number(tx?.sells ?? 0),
+    traders24: Number(tx?.buyers ?? 0) + Number(tx?.sellers ?? 0),
+    mcap:
+      a.market_cap_usd != null
+        ? Number(a.market_cap_usd)
+        : a.fdv_usd != null
+          ? Number(a.fdv_usd)
+          : undefined,
     liquidity: a.reserve_in_usd != null ? Number(a.reserve_in_usd) : undefined,
-    change: a.price_change_percentage?.h24 != null ? Number(a.price_change_percentage.h24) : undefined,
+    change:
+      a.price_change_percentage?.h24 != null
+        ? Number(a.price_change_percentage.h24)
+        : undefined,
   };
 }
 
@@ -56,17 +93,16 @@ export function tradeToEvent(t: unknown, pool: PoolInfo): SmartEvent | null {
   const usd = Number(a.volume_in_usd);
   const wallet = String(a.tx_from_address || "");
   if (!wallet || !Number.isFinite(usd) || usd <= 0) return null;
-  const ts = a.block_timestamp
-    ? Date.parse(String(a.block_timestamp))
-    : Date.now();
+  const ts = a.block_timestamp ? Date.parse(String(a.block_timestamp)) : Date.now();
   const txHash = String(a.tx_hash || "tx");
   return {
     id: `${txHash}_${wallet.slice(0, 6)}_${pool.baseMint.slice(0, 4)}`,
     ts: Number.isFinite(ts) ? ts : Date.now(),
     chain: "solana",
     wallet,
-    walletShort: wallet.length > 9 ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : wallet,
-    segment: "smart", // placeholder — market mode renders a neutral dot, no claim
+    walletShort:
+      wallet.length > 9 ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : wallet,
+    segment: "smart",
     action: a.kind === "sell" ? "sell" : "buy",
     token: pool.baseSymbol,
     tokenMint: pool.baseMint,
@@ -93,22 +129,29 @@ async function gt(path: string): Promise<unknown | null> {
   }
 }
 
-async function build(): Promise<SmartEvent[] | null> {
+async function build(): Promise<MarketSnapshot | null> {
   const trending = (await gt("/networks/solana/trending_pools?page=1")) as
     | { data?: unknown[] }
     | null;
   const pools = (trending?.data || [])
     .map(parsePool)
-    .filter((p): p is PoolInfo => p != null)
-    .slice(0, 8);
+    .filter((p): p is PoolInfo => p != null);
   if (pools.length === 0) return null;
 
-  const top = pools.slice(0, 8);
+  // Real 24h aggregates across the trending market (not the small trade sample).
+  const byVol = [...pools].sort((a, b) => b.vol24 - a.vol24);
+  const stats: MarketStats = {
+    volume24h: Math.round(pools.reduce((s, p) => s + p.vol24, 0)),
+    trades24h: pools.reduce((s, p) => s + p.txns24, 0),
+    traders24h: pools.reduce((s, p) => s + p.traders24, 0),
+    topToken: byVol[0]?.baseSymbol || "—",
+  };
+
+  // Recent real trades for the feed (top pools, dust filtered, varied).
+  const top = byVol.slice(0, 8);
   const tradeLists = await Promise.all(
     top.map((p) => gt(`/networks/solana/pools/${p.poolAddr}/trades`)),
   );
-
-  // Drop sub-dollar dust (rounds to $0). Keep trades >= MIN_TRADE_USD.
   const minUsd = Number(process.env.MIN_TRADE_USD) || 50;
   const all: SmartEvent[] = [];
   tradeLists.forEach((tl, i) => {
@@ -118,9 +161,7 @@ async function build(): Promise<SmartEvent[] | null> {
       if (ev && ev.amountUsd >= minUsd) all.push(ev);
     }
   });
-  if (all.length === 0) return null;
 
-  // Freshest first, capped per token so one pool doesn't flood the feed.
   all.sort((a, b) => b.ts - a.ts);
   const perToken = new Map<string, number>();
   const events: SmartEvent[] = [];
@@ -131,12 +172,14 @@ async function build(): Promise<SmartEvent[] | null> {
     events.push(e);
     if (events.length >= 40) break;
   }
-  return events;
+  if (events.length === 0) return null;
+
+  return { events, stats };
 }
 
-export async function getMarketSnapshot(): Promise<SmartEvent[] | null> {
-  if (cache && Date.now() - cache.at < TTL) return cache.events;
-  const events = await build().catch(() => null);
-  cache = { at: Date.now(), events };
-  return events;
+export async function getMarketSnapshot(): Promise<MarketSnapshot | null> {
+  if (cache && Date.now() - cache.at < TTL) return cache.snap;
+  const snap = await build().catch(() => null);
+  cache = { at: Date.now(), snap };
+  return snap;
 }

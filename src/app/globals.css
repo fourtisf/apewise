@@ -16,8 +16,8 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #f0f2f6;
   --text-muted: #8b93a3;
-  --accent: #22e5a4; /* smart-money green */
-  --accent-2: #7c5cff; /* AI violet */
+  --accent: #e8ebf0; /* full-dark monochrome: platinum accent (was neon green) */
+  --accent-2: #8b93a3; /* neutralized cool gray (was AI violet) */
   --red: #ff7a7a;
   --amber: #ffce54;
   --radius: 20px;
@@ -182,22 +182,17 @@
   inset: 0;
   background:
     radial-gradient(
-      40rem 30rem at 15% -5%,
-      color-mix(in srgb, var(--accent) 20%, transparent),
-      transparent 58%
+      42rem 32rem at 18% -6%,
+      rgba(255, 255, 255, 0.05),
+      transparent 56%
     ),
     radial-gradient(
-      42rem 32rem at 95% 0%,
-      color-mix(in srgb, var(--accent-2) 22%, transparent),
-      transparent 58%
+      40rem 30rem at 92% -2%,
+      rgba(255, 255, 255, 0.035),
+      transparent 56%
     ),
-    radial-gradient(
-      54rem 42rem at 50% 112%,
-      color-mix(in srgb, var(--accent-2) 12%, transparent),
-      transparent 60%
-    ),
-    /* depth vignette — premium darks fade toward the edges/bottom */
-    linear-gradient(180deg, transparent 58%, rgba(0, 0, 0, 0.38) 100%);
+    /* depth vignette — neutral, keeps it full-dark while fading toward the bottom */
+    linear-gradient(180deg, transparent 52%, rgba(0, 0, 0, 0.5) 100%);
 }
 
 /* soft floating glow blobs */
@@ -205,7 +200,7 @@
   position: absolute;
   border-radius: 999px;
   filter: blur(60px);
-  opacity: 0.45;
+  opacity: 0.12;
 }
 
 /* fine grain / noise overlay */

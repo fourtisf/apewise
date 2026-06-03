@@ -45,7 +45,7 @@ export function Hero() {
             </Reveal>
 
             <Reveal delay={0.06}>
-              <h1 className="mt-6 text-balance text-[2.6rem] font-semibold leading-[1.04] text-text sm:text-6xl lg:text-[4rem]">
+              <h1 className="headline-sheen mt-6 text-balance text-[2.6rem] font-semibold leading-[1.04] sm:text-6xl lg:text-[4rem]">
                 {h.h1}
               </h1>
             </Reveal>

@@ -147,6 +147,11 @@ export function SmartMoneyFeed() {
           })}
         </AnimatePresence>
       </ul>
+
+      {/* Honest label: this panel is an illustrative preview, not a live feed yet. */}
+      <div className="border-t border-[var(--border)] px-5 py-2.5 text-center font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-muted">
+        {f.note}
+      </div>
     </div>
   );
 }

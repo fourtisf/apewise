@@ -6,8 +6,9 @@ real time, with wallet segmentation (Smart 🟢 / Sniper ⚡ / Insider 🔴 / KO
 anti-rug fusion, and Telegram-native delivery in multiple languages.
 Independent brand, **powered by Fourtis**.
 
-> **Scope:** landing page only. All product data (feed, stats) is **mocked** and the
-> waitlist endpoint is a **stub**. Every mock is marked `// TODO`.
+> **Scope:** landing page only. Product data (feed, stats) is **illustrative** and clearly
+> labelled *private beta*. The waitlist endpoint **persists signups to a durable local JSONL
+> file** (and optionally forwards to a webhook). Remaining mocks are marked `// TODO`.
 
 ---
 
@@ -45,7 +46,9 @@ Copy `.env.example` to `.env.local` (or set in your host):
 | Variable | Required | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_SITE_URL` | recommended | Absolute base URL for canonical / OG / sitemap. Defaults to `https://apewise.ai`. |
-| `WAITLIST_WEBHOOK_URL` | optional | If set, `/api/waitlist` forwards validated signups here. Left blank, the route just validates + logs. |
+| `WAITLIST_WEBHOOK_URL` | optional | If set, `/api/waitlist` also forwards each validated signup here (e.g. Sheets/Zapier/CRM). |
+| `WAITLIST_FILE` | optional | Path to the durable JSONL file every signup is appended to. Defaults to `./data/waitlist.jsonl` (gitignored, survives restarts + deploys). |
+| `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | optional | Set to your site domain (e.g. `apewise.ai`) to enable privacy-friendly Plausible analytics + the `Waitlist Signup` goal. |
 
 The app runs fine with **no env vars** for local dev.
 
@@ -97,7 +100,7 @@ woff2 files in `src/app/fonts/`, switch to `next/font/local`, and remove the
 ### Mock data & stubs (replace before launch)
 
 - `src/lib/mock.ts` — Smart Money Feed generator. `// TODO` real on-chain stream.
-- `src/app/api/waitlist/route.ts` — validates + logs. `// TODO` real capture.
+- `src/app/api/waitlist/route.ts` — validates + persists to `data/waitlist.jsonl` (+ optional webhook). `// TODO` move to a real DB/CRM at scale.
 - `public/og.svg` — placeholder social image. `// TODO` replace with a 1200×630 PNG.
 
 ---

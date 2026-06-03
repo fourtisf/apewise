@@ -3,6 +3,7 @@ import "./globals.css";
 import { StringsProvider } from "@/lib/strings";
 import { Background } from "@/components/Background";
 import { JsonLd } from "@/components/JsonLd";
+import { Analytics } from "@/components/Analytics";
 import {
   SITE_URL,
   SITE_NAME,
@@ -82,6 +83,7 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <body>
+        <Analytics />
         <JsonLd />
         <Background />
         <StringsProvider>{children}</StringsProvider>

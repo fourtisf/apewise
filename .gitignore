@@ -32,3 +32,6 @@ next-env.d.ts
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# runtime data (waitlist signups, etc. — keep out of git, must survive deploys)
+/data

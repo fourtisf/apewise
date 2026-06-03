@@ -7,12 +7,13 @@ import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Reveal } from "@/components/ui/Reveal";
 import { Button } from "@/components/ui/Button";
 import { TELEGRAM_ALERTS_URL } from "@/lib/site";
+import { track } from "@/lib/analytics";
 
 type Status = "idle" | "loading" | "success" | "error";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function Waitlist() {
-  const { strings } = useStrings();
+  const { strings, locale } = useStrings();
   const w = strings.waitlist;
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
@@ -31,12 +32,13 @@ export function Waitlist() {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, locale }),
       });
       if (!res.ok) throw new Error("request failed");
       setStatus("success");
       setMessage(w.success);
       setEmail("");
+      track("Waitlist Signup", { locale });
     } catch {
       setStatus("error");
       setMessage(w.errorGeneric);

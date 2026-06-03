@@ -11,7 +11,7 @@ import { StatCounter } from "./StatCounter";
 export function Hero() {
   const { strings } = useStrings();
   const h = strings.hero;
-  const stats = [h.stats.wallets, h.stats.signals, h.stats.chains];
+  const stats = [h.stats.segments, h.stats.chains, h.stats.languages];
 
   return (
     <section
@@ -33,12 +33,15 @@ export function Hero() {
           {/* Copy */}
           <div>
             <Reveal>
-              <Badge tone="accent">
-                <span className="relative inline-flex h-1.5 w-1.5">
-                  <span className="pulse-dot inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
-                </span>
-                {h.badge}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="accent">
+                  <span className="relative inline-flex h-1.5 w-1.5">
+                    <span className="pulse-dot inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+                  </span>
+                  {h.badge}
+                </Badge>
+                <Badge tone="muted">{h.statusBeta}</Badge>
+              </div>
             </Reveal>
 
             <Reveal delay={0.06}>

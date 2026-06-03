@@ -26,18 +26,20 @@ export const en = {
 
   hero: {
     badge: "Solana-first smart-money tracker",
+    statusBeta: "Private beta",
     h1: "Follow the smartest money on Solana.",
     sub: "ApeWise scores profitable on-chain wallets and alerts you the second they ape in — segmented, anti-rug fused, and delivered Telegram-native in your language.",
     ctaPrimary: "Get Early Access",
     ctaSecondary: "See how it works",
     stats: {
-      wallets: { value: 48.2, decimals: 1, suffix: "K", label: "Wallets scored" },
-      signals: { value: 2.14, decimals: 2, suffix: "M", label: "Signals fired" },
-      chains: { value: 5, decimals: 0, suffix: "", label: "Chains tracked" },
+      segments: { value: 4, decimals: 0, suffix: "", label: "Wallet segments" },
+      chains: { value: 5, decimals: 0, suffix: "", label: "Chains on the roadmap" },
+      languages: { value: 5, decimals: 0, suffix: "", label: "Languages at launch" },
     },
     feed: {
       title: "Smart Money Feed",
-      live: "LIVE",
+      live: "PREVIEW",
+      note: "Sample data · private beta",
       buy: "BUY",
       sell: "SELL",
     },

@@ -1,0 +1,265 @@
+/* Fonts — Fontshare (Clash Display + Satoshi) and Google (JetBrains Mono).
+   Loaded via @import because local woff2 files are not bundled in this repo.
+   See README "Fonts" for swapping to self-hosted next/font/local. */
+@import url("https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DESIGN TOKENS  (signed-off prototype values)
+   ============================================================ */
+:root {
+  --bg: #08090a;
+  --surface: #101114;
+  --surface-2: #16181d;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #ecedef;
+  --text-muted: #9aa0a8;
+  --accent: #22e5a4; /* smart-money green */
+  --accent-2: #7c5cff; /* AI violet */
+  --red: #ff7a7a;
+  --amber: #ffce54;
+  --radius: 20px;
+
+  --font-display: "Clash Display", system-ui, -apple-system, sans-serif;
+  --font-body: "Satoshi", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    color: #fff;
+  }
+
+  /* Accessible, on-brand focus ring */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Slim dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface-2);
+    border-radius: 999px;
+    border: 2px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #23262d;
+  }
+}
+
+/* ============================================================
+   COMPONENT UTILITIES
+   ============================================================ */
+@layer components {
+  .container-content {
+    @apply mx-auto w-full max-w-[1200px] px-5 sm:px-6 lg:px-8;
+  }
+
+  .section {
+    @apply scroll-mt-24 py-20 sm:py-28;
+  }
+
+  /* Glassmorphism card */
+  .glass {
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .kicker {
+    @apply inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-text-muted;
+  }
+
+  /* Accent gradient text */
+  .text-gradient {
+    background: linear-gradient(
+      100deg,
+      var(--text) 0%,
+      var(--text) 40%,
+      var(--accent) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .hairline {
+    @apply border-t border-[var(--border)];
+  }
+}
+
+/* ============================================================
+   BACKGROUND LAYERS  (rendered by <Background />)
+   ============================================================ */
+.bg-layers {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* masked grid */
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 60% at 50% -10%,
+    #000 30%,
+    transparent 75%
+  );
+  mask-image: radial-gradient(
+    ellipse 90% 60% at 50% -10%,
+    #000 30%,
+    transparent 75%
+  );
+  opacity: 0.6;
+}
+
+/* gradient mesh wash */
+.bg-mesh {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      40rem 30rem at 15% -5%,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      42rem 32rem at 95% 0%,
+      color-mix(in srgb, var(--accent-2) 18%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      50rem 40rem at 50% 110%,
+      color-mix(in srgb, var(--accent-2) 10%, transparent),
+      transparent 60%
+    );
+}
+
+/* soft floating glow blobs */
+.bg-glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(80px);
+  opacity: 0.5;
+}
+
+/* fine grain / noise overlay */
+.bg-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* live pulse dot */
+.pulse-dot {
+  position: relative;
+}
+.pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  80%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes float-blob {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0);
+  }
+}
+
+.animate-float {
+  animation: float-blob 9s ease-in-out infinite;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

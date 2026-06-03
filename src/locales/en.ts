@@ -16,6 +16,7 @@ export const en = {
     links: {
       features: "Features",
       how: "How it works",
+      terminal: "Terminal",
       pricing: "Pricing",
       alerts: "Alerts",
     },
@@ -31,6 +32,7 @@ export const en = {
     sub: "ApeWise scores profitable on-chain wallets and alerts you the second they ape in — segmented, anti-rug fused, and delivered Telegram-native in your language.",
     ctaPrimary: "Get Early Access",
     ctaSecondary: "See how it works",
+    ctaTerminal: "Open the terminal",
     highlights: ["Sub-second Telegram alerts", "Anti-rug fused", "Wallet segments"],
     stats: {
       segments: { value: 4, decimals: 0, suffix: "", label: "Wallet segments" },
@@ -195,7 +197,7 @@ export const en = {
     errorInvalid: "Please enter a valid email address.",
     errorGeneric: "Something went wrong. Please try again.",
     telegramPrompt: "Prefer Telegram? Join",
-    telegramCta: "@apewisealerts",
+    telegramCta: "@apewisesignals",
     disclaimer: "No spam. Unsubscribe anytime.",
   },
 

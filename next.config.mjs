@@ -13,6 +13,7 @@ const nextConfig = {
     ];
     return [
       { source: "/", headers: revalidate },
+      { source: "/terminal", headers: revalidate },
       { source: "/privacy", headers: revalidate },
       { source: "/terms", headers: revalidate },
     ];

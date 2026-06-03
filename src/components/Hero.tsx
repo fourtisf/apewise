@@ -61,8 +61,8 @@ export function Hero() {
                 <Button href="#waitlist" size="lg">
                   {h.ctaPrimary}
                 </Button>
-                <Button href="#how" variant="secondary" size="lg">
-                  {h.ctaSecondary}
+                <Button href="/terminal" variant="secondary" size="lg">
+                  {h.ctaTerminal}
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Button>
               </div>

@@ -32,6 +32,7 @@ export function Nav() {
   const links: { href: string; label: string; external?: boolean }[] = [
     { href: "#features", label: n.links.features },
     { href: "#how", label: n.links.how },
+    { href: "/terminal", label: n.links.terminal },
     { href: "#pricing", label: n.links.pricing },
     { href: TELEGRAM_ALERTS_URL, label: n.links.alerts, external: true },
   ];

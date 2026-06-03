@@ -114,3 +114,61 @@ export function timeAgo(ts: number, now: number = Date.now()): string {
   const h = Math.round(m / 60);
   return `${h}h`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Terminal mock data — TODO: replace with real scoring / on-chain API
+ * ------------------------------------------------------------------ */
+
+export interface WalletStat {
+  wallet: string;
+  segment: SegmentKey;
+  winRate: number; // %
+  pnlUsd: number; // realized PnL, 7d
+  trades: number;
+}
+
+export function makeTopWallets(count = 6): WalletStat[] {
+  return Array.from({ length: count }, () => ({
+    wallet: shortWallet(),
+    segment: pick(SEGMENT_WEIGHTS),
+    winRate: Math.round(60 + Math.random() * 36),
+    pnlUsd: Math.round((Math.random() * 2.3 + 0.15) * 1_000_000),
+    trades: Math.round(40 + Math.random() * 360),
+  })).sort((a, b) => b.pnlUsd - a.pnlUsd);
+}
+
+export interface TokenInflow {
+  token: string;
+  netInflowUsd: number;
+  wallets: number;
+  changePct: number;
+}
+
+export function makeTokenInflows(count = 6): TokenInflow[] {
+  return [...TOKENS]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, count)
+    .map((token) => ({
+      token,
+      netInflowUsd: Math.round((Math.random() * 1.4 + 0.05) * 1_000_000),
+      wallets: Math.round(6 + Math.random() * 40),
+      changePct: Math.round(8 + Math.random() * 240),
+    }))
+    .sort((a, b) => b.netInflowUsd - a.netInflowUsd);
+}
+
+export interface TerminalKpis {
+  volumeUsd: number;
+  activeWallets: number;
+  signals24h: number;
+  topToken: string;
+}
+
+export function makeKpis(): TerminalKpis {
+  return {
+    volumeUsd: Math.round((Math.random() * 6 + 8) * 1_000_000),
+    activeWallets: Math.round(900 + Math.random() * 700),
+    signals24h: Math.round(2200 + Math.random() * 1800),
+    topToken: pick(TOKENS),
+  };
+}

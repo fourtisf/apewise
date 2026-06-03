@@ -14,7 +14,7 @@ export const SITE_DESCRIPTION =
 export const X_HANDLE = "apewiseai";
 export const X_URL = "https://x.com/apewiseai";
 export const TELEGRAM_MAIN = "https://t.me/apewiseai";
-export const TELEGRAM_ALERTS_HANDLE = "apewisealerts";
-export const TELEGRAM_ALERTS_URL = "https://t.me/apewisealerts";
+export const TELEGRAM_ALERTS_HANDLE = "apewisesignals";
+export const TELEGRAM_ALERTS_URL = "https://t.me/apewisesignals";
 
 export const FOURTIS_URL = "https://fourtis.io";

@@ -1,23 +1,32 @@
 import { NextResponse } from "next/server";
 import { allEvents } from "@/lib/server/store";
+import { scoreWallets } from "@/lib/server/score";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Terminal data source. Returns real, derived metrics when ingested events exist
- * (`live: true`); otherwise `live: false` and the client renders its demo data.
+ * (`live: true`): the feed, KPIs, net inflows, and a PnL-scored wallet
+ * leaderboard. Otherwise `live: false` and the client renders demo data.
  */
 export async function GET() {
   const events = await allEvents();
   if (events.length === 0) {
-    return NextResponse.json({ live: false, events: [], kpis: null, inflows: [] });
+    return NextResponse.json({
+      live: false,
+      events: [],
+      kpis: null,
+      inflows: [],
+      topWallets: [],
+    });
   }
 
   const now = Date.now();
   const day = events.filter((e) => now - e.ts < 24 * 3600 * 1000);
   const hour = events.filter((e) => now - e.ts < 3600 * 1000);
   const src = hour.length ? hour : day.length ? day : events;
+  const base = day.length ? day : events;
 
   const feed = events.slice(0, 30).map((e) => ({
     id: e.id,
@@ -28,9 +37,12 @@ export async function GET() {
     amountSol: e.amountSol ?? 0,
     amountUsd: e.amountUsd,
     ts: e.ts,
+    chain: e.chain,
+    marketCapUsd: e.marketCapUsd,
+    liquidityUsd: e.liquidityUsd,
+    riskVerdict: e.risk?.verdict,
   }));
 
-  const base = day.length ? day : events;
   const tokVol = new Map<string, number>();
   for (const e of src) tokVol.set(e.token, (tokVol.get(e.token) || 0) + e.amountUsd);
   const topToken =
@@ -69,5 +81,13 @@ export async function GET() {
     .sort((a, b) => b.netInflowUsd - a.netInflowUsd)
     .slice(0, 6);
 
-  return NextResponse.json({ live: true, events: feed, kpis, inflows });
+  const topWallets = scoreWallets(events, 6).map((w) => ({
+    wallet: w.walletShort,
+    segment: w.segment,
+    winRate: w.winRate,
+    pnlUsd: w.pnlUsd,
+    trades: w.trades,
+  }));
+
+  return NextResponse.json({ live: true, events: feed, kpis, inflows, topWallets });
 }

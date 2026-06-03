@@ -1,7 +1,7 @@
 /**
- * Best-effort market data: token symbol + SOL price, both cached and fail-soft.
- * Never throws — falls back to a short mint / a default SOL price so ingestion
- * is never blocked by a flaky third-party.
+ * Best-effort market data (symbol, price, mcap, liquidity, pair age) + SOL price.
+ * Cached and fail-soft — never throws, so ingestion is never blocked by a flaky
+ * third-party. Backed by DexScreener (no key) + CoinGecko for SOL price.
  */
 
 const WSOL = "So11111111111111111111111111111111111111112";
@@ -32,20 +32,56 @@ async function fetchJson(url: string, ms = 2500): Promise<unknown | null> {
   }
 }
 
-const symbolCache = new Map<string, string>();
+export interface TokenMarket {
+  symbol: string;
+  priceUsd?: number;
+  marketCapUsd?: number;
+  liquidityUsd?: number;
+  pairCreatedAt?: number; // ms
+}
+
+interface DexPair {
+  priceUsd?: string;
+  liquidity?: { usd?: number };
+  fdv?: number;
+  marketCap?: number;
+  pairCreatedAt?: number;
+  baseToken?: { address?: string; symbol?: string };
+}
+
+const marketCache = new Map<string, { at: number; data: TokenMarket }>();
+const MARKET_TTL = 60_000;
+
+export async function getTokenMarket(mint: string): Promise<TokenMarket> {
+  const cached = marketCache.get(mint);
+  if (cached && Date.now() - cached.at < MARKET_TTL) return cached.data;
+
+  let data: TokenMarket = { symbol: shortMint(mint) };
+  const json = (await fetchJson(
+    `https://api.dexscreener.com/latest/dex/tokens/${mint}`,
+  )) as { pairs?: DexPair[] } | null;
+
+  const pairs = (json?.pairs || []).filter((p) => p.baseToken?.address === mint);
+  if (pairs.length) {
+    // Most-liquid pair is the canonical reference.
+    const best = pairs.reduce((a, b) =>
+      (b.liquidity?.usd || 0) > (a.liquidity?.usd || 0) ? b : a,
+    );
+    data = {
+      symbol: best.baseToken?.symbol || shortMint(mint),
+      priceUsd: best.priceUsd ? Number(best.priceUsd) : undefined,
+      marketCapUsd: best.marketCap ?? best.fdv,
+      liquidityUsd: best.liquidity?.usd,
+      pairCreatedAt: best.pairCreatedAt,
+    };
+  }
+
+  marketCache.set(mint, { at: Date.now(), data });
+  return data;
+}
 
 export async function resolveSymbol(mint: string): Promise<string> {
-  if (symbolCache.has(mint)) return symbolCache.get(mint)!;
-  let symbol = shortMint(mint);
-  const data = (await fetchJson(
-    `https://api.dexscreener.com/latest/dex/tokens/${mint}`,
-  )) as { pairs?: { baseToken?: { address?: string; symbol?: string } }[] } | null;
-  const pair = data?.pairs?.find(
-    (p) => p.baseToken?.address === mint && p.baseToken?.symbol,
-  );
-  if (pair?.baseToken?.symbol) symbol = pair.baseToken.symbol;
-  symbolCache.set(mint, symbol);
-  return symbol;
+  return (await getTokenMarket(mint)).symbol;
 }
 
 let solPrice = Number(process.env.SOL_PRICE_USD) || 150;

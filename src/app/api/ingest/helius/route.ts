@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { walletMap } from "@/lib/server/wallets";
 import { parseHeliusTx, type HeliusTx } from "@/lib/server/helius";
 import { addEvents, type SmartEvent } from "@/lib/server/store";
+import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Helius enhanced-webhook receiver. Register a webhook (webhookType "enhanced",
+ * Helius enhanced-webhook receiver. Register a webhook (type "enhanced",
  * transactionTypes ["SWAP"]) for the tracked wallet addresses pointing here, with
- * an authHeader equal to INGEST_SECRET. See scripts/setup-helius-webhook.mjs.
+ * authHeader = INGEST_SECRET. See scripts/setup-helius-webhook.mjs.
  */
 function authorized(req: Request): boolean {
   const secret = process.env.INGEST_SECRET;
@@ -34,16 +35,12 @@ export async function POST(req: Request) {
   }
 
   const wallets = await walletMap();
-  const events: SmartEvent[] = [];
+  const parsed: SmartEvent[] = [];
 
   for (const tx of txs) {
-    // Find which tracked wallet this tx belongs to (any account that is a key).
     const involved = new Set<string>();
     const sw = tx.events?.swap;
-    for (const leg of [
-      ...(sw?.tokenInputs || []),
-      ...(sw?.tokenOutputs || []),
-    ]) {
+    for (const leg of [...(sw?.tokenInputs || []), ...(sw?.tokenOutputs || [])]) {
       if (leg.userAccount) involved.add(leg.userAccount);
     }
     if (sw?.nativeInput?.account) involved.add(sw.nativeInput.account);
@@ -53,18 +50,21 @@ export async function POST(req: Request) {
       const wallet = wallets.get(addr);
       if (!wallet) continue;
       const ev = await parseHeliusTx(tx, wallet);
-      if (ev) events.push(ev);
+      if (ev) parsed.push(ev);
       break; // one event per tx
     }
   }
 
-  if (events.length) {
-    await addEvents(events);
-    // Fire alerts without blocking the webhook response on every send.
-    await Promise.allSettled(events.map((e) => sendAlert(e)));
-  }
+  // Enrich (symbol / market / anti-rug), then store (dedup) and alert only new.
+  await Promise.allSettled(parsed.map((e) => enrichEvent(e)));
+  const fresh = await addEvents(parsed);
+  await Promise.allSettled(fresh.map((e) => sendAlert(e)));
 
-  return NextResponse.json({ ok: true, ingested: events.length });
+  return NextResponse.json({
+    ok: true,
+    parsed: parsed.length,
+    ingested: fresh.length,
+  });
 }
 
 export function GET() {

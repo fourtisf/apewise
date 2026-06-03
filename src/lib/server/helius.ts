@@ -1,11 +1,6 @@
 import type { SmartEvent } from "./store";
 import type { SmartWallet } from "./wallets";
-import {
-  isQuoteMint,
-  resolveSymbol,
-  getSolPriceUsd,
-  shortMint,
-} from "./market";
+import { isQuoteMint, getSolPriceUsd, shortMint } from "./market";
 
 /** Minimal shape of a Helius "enhanced" transaction (swap-relevant fields). */
 interface RawAmount {
@@ -47,10 +42,13 @@ function shortWallet(addr: string): string {
   return addr.length > 9 ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : addr;
 }
 
+const WSOL = "So11111111111111111111111111111111111111112";
+
 /**
- * Parse one enhanced tx into a SmartEvent for a tracked wallet, or null if it
- * isn't a parseable swap by that wallet. Conservative: handles SOL/stable↔token
- * swaps (the memecoin case). Never throws.
+ * Parse one enhanced tx into a (not-yet-enriched) SmartEvent for a tracked
+ * wallet, or null if it isn't a parseable swap by that wallet. Conservative:
+ * handles SOL/stable↔token swaps (the memecoin case). Never throws. Symbol /
+ * market / risk are filled later by enrichEvent.
  */
 export async function parseHeliusTx(
   tx: HeliusTx,
@@ -82,41 +80,36 @@ export async function parseHeliusTx(
   // Value: prefer a stablecoin leg (= USD directly), else the SOL leg × price.
   const quoteLegs = action === "buy" ? tokenIns : tokenOuts;
   const stableLeg = quoteLegs.find(
-    (t) => t.mint && isQuoteMint(t.mint) && t.mint !== undefined,
+    (t) => t.mint && isQuoteMint(t.mint) && t.mint !== WSOL,
   );
-  let amountUsd = 0;
-  let amountSol: number | undefined;
-
+  const wsolLeg = quoteLegs.find(
+    (t) => t.mint === WSOL && uiAmount(t.rawTokenAmount) > 0,
+  );
   const natLamports = Number(
     (action === "buy" ? swap.nativeInput : swap.nativeOutput)?.amount ?? 0,
   );
-  const wsolLeg = quoteLegs.find(
-    (t) =>
-      t.mint === "So11111111111111111111111111111111111111112" &&
-      uiAmount(t.rawTokenAmount) > 0,
-  );
 
+  let amountUsd = 0;
+  let amountSol: number | undefined;
   if (stableLeg && uiAmount(stableLeg.rawTokenAmount) > 0) {
     amountUsd = uiAmount(stableLeg.rawTokenAmount);
   } else {
     amountSol = natLamports > 0 ? natLamports / 1e9 : uiAmount(wsolLeg?.rawTokenAmount);
-    const price = await getSolPriceUsd();
-    amountUsd = Math.round((amountSol || 0) * price);
+    amountUsd = Math.round((amountSol || 0) * (await getSolPriceUsd()));
   }
 
   if (amountUsd <= 0) return null;
 
-  const symbol = await resolveSymbol(mint).catch(() => shortMint(mint!));
-
   return {
     id: `${tx.signature || "tx"}_${w.slice(0, 6)}`,
     ts: tx.timestamp ? tx.timestamp * 1000 : Date.now(),
+    chain: "solana",
     wallet: w,
     walletShort: shortWallet(w),
     label: wallet.label,
     segment: wallet.segment,
     action,
-    token: symbol,
+    token: shortMint(mint), // replaced with the real symbol by enrichEvent
     tokenMint: mint,
     amountUsd: Math.round(amountUsd),
     amountSol,

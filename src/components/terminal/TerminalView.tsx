@@ -94,6 +94,8 @@ export function TerminalView() {
           if (data.kpis) setKpis(data.kpis as TerminalKpis);
           if (Array.isArray(data.inflows) && data.inflows.length)
             setInflows(data.inflows as TokenInflow[]);
+          if (Array.isArray(data.topWallets) && data.topWallets.length)
+            setWallets(data.topWallets as WalletStat[]);
         } else {
           liveRef.current = false;
           setLive(false);

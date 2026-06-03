@@ -148,28 +148,27 @@ export function TerminalView() {
     )
     .slice(0, 18);
 
+  const mkt = source === "market";
   const kpiCards = kpis
     ? [
         {
           icon: Activity,
-          label: "Smart-money volume · 24h",
+          label: mkt ? "Market volume · 24h" : "Smart-money volume · 24h",
           value: formatUsd(kpis.volumeUsd),
         },
         {
           icon: Wallet,
-          label: "Active smart wallets",
+          label: mkt ? "Active traders" : "Active smart wallets",
           value: kpis.activeWallets.toLocaleString("en-US"),
         },
         {
           icon: Zap,
-          label: "Signals fired · 24h",
+          label: mkt ? "Trades · 24h" : "Signals fired · 24h",
           value: kpis.signals24h.toLocaleString("en-US"),
         },
         { icon: Flame, label: "Top token · 1h", value: `$${kpis.topToken}` },
       ]
     : [];
-
-  const maxInflow = inflows[0]?.netInflowUsd || 1;
 
   return (
     <div className="min-h-screen">
@@ -474,7 +473,7 @@ export function TerminalView() {
             <div className="glass overflow-hidden">
               <div className="border-b border-[var(--border)] px-5 py-3.5">
                 <span className="font-display text-sm font-semibold text-text">
-                  Smart-Money Inflows · 1h
+                  {mkt ? "Token Net Flow · live" : "Smart-Money Inflows · 1h"}
                 </span>
               </div>
               <ul>
@@ -485,10 +484,8 @@ export function TerminalView() {
                     </li>
                   ))}
                 {inflows.map((t) => {
-                  const pct = Math.max(
-                    8,
-                    Math.round((t.netInflowUsd / maxInflow) * 100),
-                  );
+                  const pct = Math.max(6, Math.min(100, t.changePct));
+                  const positive = t.netInflowUsd >= 0;
                   return (
                     <li
                       key={t.token}
@@ -498,8 +495,14 @@ export function TerminalView() {
                         <span className="font-mono text-sm text-text">
                           ${t.token}
                         </span>
-                        <span className="font-mono text-sm tabular-nums text-text">
-                          {formatUsd(t.netInflowUsd)}
+                        <span
+                          className={cn(
+                            "font-mono text-sm tabular-nums",
+                            positive ? "text-text" : "text-red",
+                          )}
+                        >
+                          {positive ? "+" : "−"}
+                          {formatUsd(Math.abs(t.netInflowUsd))}
                         </span>
                       </div>
                       <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
@@ -509,7 +512,8 @@ export function TerminalView() {
                         />
                       </div>
                       <div className="mt-1.5 font-mono text-[0.65rem] text-text-muted">
-                        {t.wallets} smart wallets · +{t.changePct}%
+                        {t.wallets} {mkt ? "traders" : "smart wallets"} ·{" "}
+                        {t.changePct}% buys
                       </div>
                     </li>
                   );

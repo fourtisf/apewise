@@ -61,11 +61,11 @@ function derive(events: SmartEvent[]) {
   const inflows = [...inflowMap.entries()]
     .map(([token, m]) => ({
       token,
-      netInflowUsd: Math.max(0, Math.round(m.net)),
+      netInflowUsd: Math.round(m.net), // signed: negative = net outflow
       wallets: m.wallets.size,
       changePct: Math.round((m.buys / Math.max(1, m.trades)) * 100),
     }))
-    .sort((a, b) => b.netInflowUsd - a.netInflowUsd)
+    .sort((a, b) => Math.abs(b.netInflowUsd) - Math.abs(a.netInflowUsd))
     .slice(0, 6);
 
   return { feed, kpis, inflows };

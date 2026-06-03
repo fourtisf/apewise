@@ -103,26 +103,35 @@ async function build(): Promise<SmartEvent[] | null> {
     .slice(0, 8);
   if (pools.length === 0) return null;
 
-  const top = pools.slice(0, 6);
+  const top = pools.slice(0, 8);
   const tradeLists = await Promise.all(
     top.map((p) => gt(`/networks/solana/pools/${p.poolAddr}/trades`)),
   );
 
-  // Trending pools include lots of sub-dollar dust trades (they round to $0 and
-  // look broken). Keep only trades worth at least MIN_TRADE_USD.
+  // Drop sub-dollar dust (rounds to $0). Keep trades >= MIN_TRADE_USD.
   const minUsd = Number(process.env.MIN_TRADE_USD) || 50;
-  const events: SmartEvent[] = [];
+  const all: SmartEvent[] = [];
   tradeLists.forEach((tl, i) => {
     const list = (tl as { data?: unknown[] } | null)?.data || [];
-    for (const t of list.slice(0, 20)) {
+    for (const t of list.slice(0, 30)) {
       const ev = tradeToEvent(t, top[i]);
-      if (ev && ev.amountUsd >= minUsd) events.push(ev);
+      if (ev && ev.amountUsd >= minUsd) all.push(ev);
     }
   });
+  if (all.length === 0) return null;
 
-  if (events.length === 0) return null;
-  events.sort((a, b) => b.ts - a.ts);
-  return events.slice(0, 40);
+  // Freshest first, capped per token so one pool doesn't flood the feed.
+  all.sort((a, b) => b.ts - a.ts);
+  const perToken = new Map<string, number>();
+  const events: SmartEvent[] = [];
+  for (const e of all) {
+    const c = perToken.get(e.token) || 0;
+    if (c >= 4) continue;
+    perToken.set(e.token, c + 1);
+    events.push(e);
+    if (events.length >= 40) break;
+  }
+  return events;
 }
 
 export async function getMarketSnapshot(): Promise<SmartEvent[] | null> {

@@ -103,17 +103,20 @@ async function build(): Promise<SmartEvent[] | null> {
     .slice(0, 8);
   if (pools.length === 0) return null;
 
-  const top = pools.slice(0, 3);
+  const top = pools.slice(0, 6);
   const tradeLists = await Promise.all(
     top.map((p) => gt(`/networks/solana/pools/${p.poolAddr}/trades`)),
   );
 
+  // Trending pools include lots of sub-dollar dust trades (they round to $0 and
+  // look broken). Keep only trades worth at least MIN_TRADE_USD.
+  const minUsd = Number(process.env.MIN_TRADE_USD) || 50;
   const events: SmartEvent[] = [];
   tradeLists.forEach((tl, i) => {
     const list = (tl as { data?: unknown[] } | null)?.data || [];
-    for (const t of list.slice(0, 14)) {
+    for (const t of list.slice(0, 20)) {
       const ev = tradeToEvent(t, top[i]);
-      if (ev) events.push(ev);
+      if (ev && ev.amountUsd >= minUsd) events.push(ev);
     }
   });
 

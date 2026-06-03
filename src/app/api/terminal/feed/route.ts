@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { allEvents, type SmartEvent } from "@/lib/server/store";
 import { scoreWallets } from "@/lib/server/score";
 import { getMarketSnapshot } from "@/lib/server/marketLive";
+import { getGmgnTopWallets } from "@/lib/server/gmgn";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,13 +100,25 @@ export async function GET() {
   const market = await getMarketSnapshot();
   if (market && market.length > 0) {
     const { feed, kpis, inflows } = derive(market);
+    // Real smart-money leaderboard sourced from GMGN (falls back to [] if blocked).
+    const gmgn = await getGmgnTopWallets(6);
+    const topWallets = gmgn.map((w) => ({
+      wallet:
+        w.address.length > 9
+          ? `${w.address.slice(0, 4)}…${w.address.slice(-4)}`
+          : w.address,
+      segment: w.segment,
+      winRate: w.winRate,
+      pnlUsd: w.pnlUsd,
+      trades: w.trades,
+    }));
     return NextResponse.json({
       live: true,
       source: "market",
       events: feed,
       kpis,
       inflows,
-      topWallets: [],
+      topWallets,
     });
   }
 

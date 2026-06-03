@@ -77,6 +77,7 @@ export function TerminalView() {
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(false);
   const [source, setSource] = useState<"smart" | "market" | "demo">("demo");
+  const [walletsLive, setWalletsLive] = useState(false);
   const liveRef = useRef(false);
 
   // Populate on mount (client-only) to avoid a hydration mismatch from Math.random.
@@ -118,8 +119,12 @@ export function TerminalView() {
           if (data.kpis) setKpis(data.kpis as TerminalKpis);
           if (Array.isArray(data.inflows) && data.inflows.length)
             setInflows(data.inflows as TokenInflow[]);
-          if (Array.isArray(data.topWallets) && data.topWallets.length)
+          if (Array.isArray(data.topWallets) && data.topWallets.length) {
             setWallets(data.topWallets as WalletStat[]);
+            setWalletsLive(true);
+          } else {
+            setWalletsLive(false);
+          }
         } else {
           liveRef.current = false;
           setLive(false);
@@ -421,10 +426,10 @@ export function TerminalView() {
                   Top Smart Wallets · 7d
                 </span>
               </div>
-              {source === "market" ? (
+              {!walletsLive && source === "market" ? (
                 <div className="px-5 py-8 text-center text-sm leading-relaxed text-text-muted">
-                  Wallet PnL scoring activates with tracked wallets — connect
-                  Helius to rank smart wallets here.
+                  Smart-wallet leaderboard unavailable — GMGN may be blocking the
+                  request. Connect Helius to rank tracked wallets here.
                 </div>
               ) : (
               <ul>

@@ -25,13 +25,32 @@ const TTL = 30_000;
 export async function getSmartWallets(): Promise<SmartWallet[]> {
   const now = Date.now();
   if (cache && now - cachedAt < TTL) return cache;
+
+  let manual: SmartWallet[] = [];
   try {
-    const txt = await fs.readFile(FILE, "utf8");
-    const parsed = JSON.parse(txt) as SmartWallet[];
-    cache = Array.isArray(parsed) ? parsed.filter((w) => w?.address) : [];
+    const parsed = JSON.parse(await fs.readFile(FILE, "utf8")) as SmartWallet[];
+    manual = Array.isArray(parsed) ? parsed.filter((w) => w?.address) : [];
   } catch {
-    cache = [];
+    manual = [];
   }
+
+  // Auto-source smart wallets from GMGN's leaderboard (set USE_GMGN_WALLETS=false
+  // to disable). Fail-soft. Manual entries win, so your custom picks/labels stay.
+  let gmgn: SmartWallet[] = [];
+  if (process.env.USE_GMGN_WALLETS !== "false") {
+    try {
+      const { getGmgnSmartWallets } = await import("./gmgn");
+      gmgn = await getGmgnSmartWallets(50);
+    } catch {
+      gmgn = [];
+    }
+  }
+
+  const map = new Map<string, SmartWallet>();
+  for (const w of gmgn) map.set(w.address, w);
+  for (const w of manual) map.set(w.address, w);
+
+  cache = [...map.values()];
   cachedAt = now;
   return cache;
 }

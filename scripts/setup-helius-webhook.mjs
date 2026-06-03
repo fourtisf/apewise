@@ -24,17 +24,49 @@ if (!apiKey || !webhookURL) {
   process.exit(1);
 }
 
-let wallets;
+let manual = [];
 try {
-  wallets = JSON.parse(await readFile(walletsFile, "utf8"));
+  manual = JSON.parse(await readFile(walletsFile, "utf8"));
 } catch {
-  console.error(`Could not read ${walletsFile}. Copy smart-wallets.example.json there.`);
-  process.exit(1);
+  console.log(`(no ${walletsFile} — using GMGN-sourced wallets only)`);
 }
 
-const accountAddresses = wallets.map((w) => w.address).filter(Boolean);
+// Auto-source smart wallets from GMGN (set USE_GMGN_WALLETS=false to skip).
+let gmgn = [];
+if (process.env.USE_GMGN_WALLETS !== "false") {
+  try {
+    const res = await fetch(
+      "https://gmgn.ai/defi/quotation/v1/rank/sol/wallets/7d?orderby=pnl_7d&direction=desc",
+      {
+        headers: {
+          "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+          accept: "application/json",
+          referer: "https://gmgn.ai/",
+        },
+      },
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const rank = json?.data?.rank || json?.data || [];
+      gmgn = (Array.isArray(rank) ? rank : [])
+        .slice(0, 50)
+        .map((r) => r.wallet_address || r.address)
+        .filter(Boolean);
+      console.log(`GMGN: sourced ${gmgn.length} wallets`);
+    } else {
+      console.warn(`GMGN request failed (${res.status}) — Cloudflare may be blocking. Manual list only.`);
+    }
+  } catch (e) {
+    console.warn("GMGN fetch failed:", e.message);
+  }
+}
+
+const accountAddresses = [
+  ...new Set([...gmgn, ...manual.map((w) => w.address)].filter(Boolean)),
+];
 if (accountAddresses.length === 0) {
-  console.error(`No wallet addresses in ${walletsFile}.`);
+  console.error("No wallet addresses (GMGN blocked and no manual list).");
   process.exit(1);
 }
 

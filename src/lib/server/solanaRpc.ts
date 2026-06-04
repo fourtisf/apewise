@@ -204,6 +204,10 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   const callDelay = Number(process.env.RPC_CALL_DELAY_MS) || 150;
   const perWallet = Math.min(Number(process.env.RPC_SIGS_PER_WALLET) || 10, 25);
   const maxAgeMs = (Number(process.env.RPC_MAX_AGE_MIN) || 120) * 60_000;
+  // On first sight of a wallet (incl. after every app restart) look back a short
+  // window so recent smart trades surface immediately instead of waiting for a
+  // brand-new one. Dedup (addEvents by txSig) keeps restarts from re-alerting.
+  const lookbackMs = (Number(process.env.RPC_LOOKBACK_MIN) || 20) * 60_000;
   const out: SmartEvent[] = [];
 
   for (const wallet of wallets) {
@@ -216,18 +220,13 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
     if (!sigs || !sigs.length) continue;
 
     const newest = sigs[0].signature;
-
-    // First time we see this wallet: set the cursor, emit nothing (no backfill).
-    if (!initialized.has(w)) {
-      initialized.add(w);
-      seen.set(w, newest);
-      continue;
-    }
-
+    const firstSight = !initialized.has(w);
+    initialized.add(w);
     const prevSeen = seen.get(w);
+
     const fresh: SigInfo[] = [];
     for (const s of sigs) {
-      if (s.signature === prevSeen) break; // caught up
+      if (prevSeen && s.signature === prevSeen) break; // caught up to cursor
       fresh.push(s);
     }
     seen.set(w, newest);
@@ -236,7 +235,10 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
     // Oldest-first so the feed ordering is chronological within the batch.
     for (const s of fresh.reverse()) {
       if (s.err) continue;
-      if (s.blockTime && Date.now() - s.blockTime * 1000 > maxAgeMs) continue;
+      // First sight: only the recent lookback window. Ongoing: cursor bounds it,
+      // with a generous staleness guard.
+      const ageMs = s.blockTime ? Date.now() - s.blockTime * 1000 : 0;
+      if (ageMs > (firstSight ? lookbackMs : maxAgeMs)) continue;
       const tx = await rpc<RpcTx>("getTransaction", [
         s.signature,
         { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" },

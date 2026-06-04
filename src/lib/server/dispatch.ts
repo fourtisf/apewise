@@ -1,0 +1,39 @@
+import { getMarketSnapshot } from "./marketLive";
+import { postToChannel, fmtUsd, chartKeyboard } from "./alerts";
+
+/**
+ * Broadcast notable on-chain activity to the signals channel. Until Helius
+ * smart-money tracking is wired, this posts BIG market buys (>= ALERT_MIN_USD)
+ * from the live feed. De-duped per trade id; called on an interval by the alert
+ * worker (or a cron) hitting /api/alerts/dispatch.
+ */
+const alerted = new Set<string>();
+
+export async function dispatchAlerts(): Promise<number> {
+  const minUsd = Number(process.env.ALERT_MIN_USD) || 1000;
+  const snap = await getMarketSnapshot();
+  if (!snap) return 0;
+
+  const candidates = snap.events
+    .filter(
+      (e) => e.action === "buy" && e.amountUsd >= minUsd && !alerted.has(e.id),
+    )
+    .sort((a, b) => b.amountUsd - a.amountUsd)
+    .slice(0, 3);
+
+  let posted = 0;
+  for (const e of candidates) {
+    const lines = [
+      `🟢 <b>BIG BUY</b> · <b>$${e.token}</b>`,
+      `<code>${e.walletShort}</code> bought <b>${fmtUsd(e.amountUsd)}</b>`,
+      e.marketCapUsd != null ? `🧢 MC ${fmtUsd(e.marketCapUsd)}` : null,
+      e.tokenMint ? `<code>${e.tokenMint}</code>` : null,
+    ].filter(Boolean) as string[];
+    if (await postToChannel(lines.join("\n"), chartKeyboard(e.tokenMint))) {
+      alerted.add(e.id);
+      posted++;
+    }
+  }
+  if (alerted.size > 3000) alerted.clear();
+  return posted;
+}

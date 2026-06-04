@@ -1,24 +1,65 @@
 import type { SmartEvent } from "./store";
 
-/**
- * Telegram alert for a smart-money event → the signals channel.
- * - No-ops (logs) if the bot token / chat id aren't set.
- * - Rate-limited per wallet+token (anti-spam).
- * - Suppresses high-risk tokens unless ALERT_ON_RISK=true.
- */
+/** Low-level Telegram sendMessage to any chat. No-op (logs) without a token. */
+export async function tgSend(
+  chatId: string | number,
+  text: string,
+  replyMarkup?: unknown,
+): Promise<boolean> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.log(`[tg] (no token)\n${text}`);
+    return false;
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
+    });
+    if (!res.ok) {
+      console.error("[tg] error:", await res.text());
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[tg] send failed:", e);
+    return false;
+  }
+}
+
+/** Post to the signals channel (TELEGRAM_SIGNALS_CHAT_ID, e.g. @apewisesignals). */
+export async function postToChannel(
+  text: string,
+  replyMarkup?: unknown,
+): Promise<boolean> {
+  const chatId = process.env.TELEGRAM_SIGNALS_CHAT_ID;
+  if (!chatId) {
+    console.log(`[tg] (no channel)\n${text}`);
+    return false;
+  }
+  return tgSend(chatId, text, replyMarkup);
+}
+
+export function fmtUsd(n?: number): string | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1000) return `$${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return `$${Math.round(n)}`;
+}
+
 const SEG_EMOJI: Record<SmartEvent["segment"], string> = {
   smart: "🟢",
   sniper: "⚡",
   insider: "🔴",
   kol: "🎤",
 };
-
-function fmtUsd(n?: number): string | null {
-  if (n == null || !Number.isFinite(n)) return null;
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1000) return `$${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return `$${Math.round(n)}`;
-}
 
 function fmtAge(min?: number): string | null {
   if (min == null) return null;
@@ -36,11 +77,23 @@ function riskLine(ev: SmartEvent): string | null {
   return `🚨 High risk: ${r.reasons.slice(0, 2).join(", ") || "checks flagged"}`;
 }
 
-function buyLink(ev: SmartEvent): string | null {
-  if (!ev.tokenMint) return null;
-  const tmpl = process.env.BUY_LINK_TEMPLATE; // e.g. https://t.me/yourbot?start={mint}
-  if (tmpl) return tmpl.replace("{mint}", ev.tokenMint);
-  return `https://dexscreener.com/solana/${ev.tokenMint}`;
+function buyLink(mint: string): string {
+  const tmpl = process.env.BUY_LINK_TEMPLATE;
+  return tmpl
+    ? tmpl.replace("{mint}", mint)
+    : `https://dexscreener.com/solana/${mint}`;
+}
+
+export function chartKeyboard(mint?: string) {
+  if (!mint) return undefined;
+  return {
+    inline_keyboard: [
+      [
+        { text: "⚡ Buy", url: buyLink(mint) },
+        { text: "📊 Chart", url: `https://dexscreener.com/solana/${mint}` },
+      ],
+    ],
+  };
 }
 
 // Per wallet+token cooldown (anti-spam).
@@ -60,15 +113,13 @@ function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
+/** Smart-money alert (tracked-wallet swap via Helius) → signals channel. */
 export async function sendAlert(ev: SmartEvent): Promise<void> {
   const g = gate(ev);
   if (!g.ok) {
     console.log(`[alert] skipped (${g.reason}) ${ev.action} ${ev.token}`);
     return;
   }
-
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_SIGNALS_CHAT_ID;
 
   const verb = ev.action === "buy" ? "BUY" : "SELL";
   const who = ev.label ? `${ev.label} (${ev.segment})` : `${ev.segment} wallet`;
@@ -84,42 +135,7 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     metrics.length ? metrics.join("  ·  ") : null,
     riskLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
 
-  if (!token || !chatId) {
-    console.log(`[alert] (not configured)\n${lines.join("\n")}`);
-    return;
-  }
-
-  const buy = buyLink(ev);
-  const keyboard = ev.tokenMint
-    ? {
-        inline_keyboard: [
-          [
-            ...(buy ? [{ text: "⚡ Buy", url: buy }] : []),
-            {
-              text: "📊 Chart",
-              url: `https://dexscreener.com/solana/${ev.tokenMint}`,
-            },
-          ],
-        ],
-      }
-    : undefined;
-
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: lines.join("\n"),
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-        ...(keyboard ? { reply_markup: keyboard } : {}),
-      }),
-    });
-    if (!res.ok) console.error("[alert] telegram error:", await res.text());
-  } catch (e) {
-    console.error("[alert] telegram send failed:", e);
-  }
+  await postToChannel(lines.join("\n"), chartKeyboard(ev.tokenMint));
 }

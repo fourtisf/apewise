@@ -43,33 +43,59 @@ export function parseTrader(r: unknown): BirdeyeTrader | null {
 
 let cache: { at: number; traders: BirdeyeTrader[] } | null = null;
 const TTL = 5 * 60_000;
+const PAGE = 10; // gainers-losers caps at limit=10; over that returns 400.
 
-export async function getTopTraders(limit = 10): Promise<BirdeyeTrader[]> {
-  if (!process.env.BIRDEYE_API_KEY) return [];
-  if (cache && Date.now() - cache.at < TTL) return cache.traders.slice(0, limit);
-
+/** Fetch one gainers-losers page (offset, limit=10). null = request failed. */
+async function fetchPage(offset: number): Promise<BirdeyeTrader[] | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 7000);
   try {
-    // gainers-losers caps at limit=10; over that returns 400.
     const res = await fetch(
-      `${BASE}/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=10`,
+      `${BASE}/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
       { headers: hdrs(), signal: ctrl.signal },
     );
-    if (!res.ok) return cache?.traders.slice(0, limit) || [];
+    if (!res.ok) return null;
     const json = (await res.json()) as { data?: unknown };
     const d = json?.data as { items?: unknown[] } | unknown[] | undefined;
     const items = Array.isArray(d) ? d : d?.items || [];
-    const traders = (Array.isArray(items) ? items : [])
+    return (Array.isArray(items) ? items : [])
       .map(parseTrader)
       .filter((x): x is BirdeyeTrader => x != null && x.pnlUsd > 0);
-    if (traders.length) cache = { at: Date.now(), traders };
-    return traders.slice(0, limit);
   } catch {
-    return cache?.traders.slice(0, limit) || [];
+    return null;
   } finally {
     clearTimeout(t);
   }
+}
+
+export async function getTopTraders(limit = 10): Promise<BirdeyeTrader[]> {
+  if (!process.env.BIRDEYE_API_KEY) return [];
+  if (cache && Date.now() - cache.at < TTL && cache.traders.length >= limit)
+    return cache.traders.slice(0, limit);
+
+  // gainers-losers is capped at 10 rows/call, so page through offsets to track
+  // more wallets. Fail-soft: stop at the first error/short/empty page, fall back
+  // to cache. Hard cap at 10 pages (~100 wallets).
+  const pages = Math.min(Math.ceil(Math.max(1, limit) / PAGE), 10);
+  const seen = new Set<string>();
+  const all: BirdeyeTrader[] = [];
+  for (let i = 0; i < pages; i++) {
+    const page = await fetchPage(i * PAGE);
+    if (!page || page.length === 0) break;
+    for (const tr of page) {
+      if (!seen.has(tr.address)) {
+        seen.add(tr.address);
+        all.push(tr);
+      }
+    }
+    if (page.length < PAGE) break; // last page
+  }
+
+  if (all.length) {
+    cache = { at: Date.now(), traders: all };
+    return all.slice(0, limit);
+  }
+  return cache?.traders.slice(0, limit) || [];
 }
 
 /** Birdeye top traders shaped for the tracked-wallet registry (Helius path). */

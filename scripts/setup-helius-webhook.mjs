@@ -63,32 +63,53 @@ if (process.env.USE_GMGN_WALLETS !== "false") {
 }
 
 // Auto-source from Birdeye (recommended — key-based, no Cloudflare).
+// gainers-losers caps at limit=10, so page through offsets to track more
+// (BIRDEYE_TRACK_LIMIT, default 50). On failure we print the response body so a
+// 400/401 is diagnosable (bad key, unsubscribed package, wrong param, …).
 let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
-  try {
-    const res = await fetch(
-      "https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=10",
-      {
-        headers: {
-          "X-API-KEY": process.env.BIRDEYE_API_KEY,
-          "x-chain": "solana",
-          accept: "application/json",
+  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 50));
+  const PAGE = 10;
+  const pages = Math.min(Math.ceil(want / PAGE), 10); // hard cap ~100
+  const seen = new Set();
+  for (let i = 0; i < pages && birdeye.length < want; i++) {
+    const offset = i * PAGE;
+    try {
+      const res = await fetch(
+        `https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
+        {
+          headers: {
+            "X-API-KEY": process.env.BIRDEYE_API_KEY,
+            "x-chain": "solana",
+            accept: "application/json",
+          },
         },
-      },
-    );
-    if (res.ok) {
+      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.warn(
+          `Birdeye request failed (${res.status}) at offset ${offset}: ${body.slice(0, 300)}`,
+        );
+        break;
+      }
       const json = await res.json();
       const items = json?.data?.items || json?.data || [];
-      birdeye = (Array.isArray(items) ? items : [])
+      const page = (Array.isArray(items) ? items : [])
         .map((t) => t.address || t.owner || t.wallet)
         .filter(Boolean);
-      console.log(`Birdeye: sourced ${birdeye.length} wallets`);
-    } else {
-      console.warn(`Birdeye request failed (${res.status}).`);
+      for (const a of page) {
+        if (!seen.has(a)) {
+          seen.add(a);
+          birdeye.push(a);
+        }
+      }
+      if (page.length < PAGE) break; // last page
+    } catch (e) {
+      console.warn("Birdeye fetch failed:", e.message);
+      break;
     }
-  } catch (e) {
-    console.warn("Birdeye fetch failed:", e.message);
   }
+  console.log(`Birdeye: sourced ${birdeye.length} wallets`);
 }
 
 const accountAddresses = [
@@ -97,7 +118,11 @@ const accountAddresses = [
   ),
 ];
 if (accountAddresses.length === 0) {
-  console.error("No wallet addresses (GMGN blocked and no manual list).");
+  console.error(
+    "No wallet addresses to track. Auto-source failed (Birdeye + GMGN) and no " +
+      `manual list found at ${walletsFile}. Create it with real addresses:\n` +
+      '  [{ "address": "...", "label": "Whale 1", "segment": "smart" }]',
+  );
   process.exit(1);
 }
 
@@ -117,4 +142,15 @@ const res = await fetch(`https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`, 
 
 console.log("HTTP", res.status);
 console.log(await res.text());
-console.log(`\nTracking ${accountAddresses.length} wallet(s) -> ${webhookURL}`);
+console.log(
+  `\nSources — birdeye ${birdeye.length}, gmgn ${gmgn.length}, manual ${manual.length}` +
+    ` → ${accountAddresses.length} unique wallet(s).`,
+);
+if (res.ok) {
+  console.log(`✓ Tracking ${accountAddresses.length} wallet(s) -> ${webhookURL}`);
+} else {
+  console.error(
+    `✗ Helius webhook registration failed (HTTP ${res.status}). See body above.`,
+  );
+  process.exit(1);
+}

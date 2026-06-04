@@ -10,7 +10,7 @@ import { postToChannel, fmtUsd, chartKeyboard } from "./alerts";
 const alerted = new Set<string>();
 
 export async function dispatchAlerts(): Promise<number> {
-  const minUsd = Number(process.env.ALERT_MIN_USD) || 1000;
+  const minUsd = Number(process.env.ALERT_MIN_USD) || 250;
   const snap = await getMarketSnapshot();
   if (!snap) return 0;
 

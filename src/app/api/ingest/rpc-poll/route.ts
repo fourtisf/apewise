@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { pollTrackedWallets, debugWalletSwaps } from "@/lib/server/solanaRpc";
+import {
+  pollTrackedWallets,
+  debugWalletSwaps,
+  activeRpcUrl,
+} from "@/lib/server/solanaRpc";
 import { addEvents } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
@@ -34,7 +38,7 @@ export async function GET(req: Request) {
     try {
       const limit = Number(url.searchParams.get("limit")) || 5;
       const rows = await debugWalletSwaps(dbg, limit);
-      return NextResponse.json({ ok: true, debug: dbg, rows });
+      return NextResponse.json({ ok: true, debug: dbg, rpc: activeRpcUrl(), rows });
     } catch (e) {
       return NextResponse.json(
         { ok: false, error: (e as Error).message },

@@ -143,14 +143,16 @@ export function parseRpcSwap(
   };
 }
 
-const RPC_URL =
-  process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+/** Read fresh each call so the active RPC always reflects current env. */
+export function activeRpcUrl(): string {
+  return process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+}
 
 async function rpc<T>(method: string, params: unknown[]): Promise<T | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 8000);
   try {
-    const res = await fetch(RPC_URL, {
+    const res = await fetch(activeRpcUrl(), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -258,7 +260,13 @@ export async function debugWalletSwaps(
   address: string,
   limit = 5,
 ): Promise<
-  Array<{ sig?: string; minsAgo?: number; err: boolean; parsed: SmartEvent | null }>
+  Array<{
+    sig?: string;
+    minsAgo?: number;
+    err: boolean;
+    gotTx: boolean;
+    parsed: SmartEvent | null;
+  }>
 > {
   const { getSolPriceUsd } = await import("./market");
   const solPrice = await getSolPriceUsd();
@@ -271,6 +279,7 @@ export async function debugWalletSwaps(
     sig?: string;
     minsAgo?: number;
     err: boolean;
+    gotTx: boolean;
     parsed: SmartEvent | null;
   }> = [];
   for (const s of sigs || []) {
@@ -285,6 +294,7 @@ export async function debugWalletSwaps(
         ? Math.round((Date.now() / 1000 - s.blockTime) / 60)
         : undefined,
       err: !!s.err,
+      gotTx: !!tx, // false = RPC throttled/failed (not a parser problem)
       parsed: tx ? parseRpcSwap(tx, wallet, solPrice) : null,
     });
   }

@@ -62,8 +62,39 @@ if (process.env.USE_GMGN_WALLETS !== "false") {
   }
 }
 
+// Auto-source from Birdeye (recommended — key-based, no Cloudflare).
+let birdeye = [];
+if (process.env.BIRDEYE_API_KEY) {
+  try {
+    const res = await fetch(
+      "https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=50",
+      {
+        headers: {
+          "X-API-KEY": process.env.BIRDEYE_API_KEY,
+          "x-chain": "solana",
+          accept: "application/json",
+        },
+      },
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const items = json?.data?.items || json?.data || [];
+      birdeye = (Array.isArray(items) ? items : [])
+        .map((t) => t.address || t.owner || t.wallet)
+        .filter(Boolean);
+      console.log(`Birdeye: sourced ${birdeye.length} wallets`);
+    } else {
+      console.warn(`Birdeye request failed (${res.status}).`);
+    }
+  } catch (e) {
+    console.warn("Birdeye fetch failed:", e.message);
+  }
+}
+
 const accountAddresses = [
-  ...new Set([...gmgn, ...manual.map((w) => w.address)].filter(Boolean)),
+  ...new Set(
+    [...birdeye, ...gmgn, ...manual.map((w) => w.address)].filter(Boolean),
+  ),
 ];
 if (accountAddresses.length === 0) {
   console.error("No wallet addresses (GMGN blocked and no manual list).");

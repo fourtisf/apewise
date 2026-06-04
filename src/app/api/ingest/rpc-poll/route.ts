@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pollTrackedWallets } from "@/lib/server/solanaRpc";
+import { pollTrackedWallets, debugWalletSwaps } from "@/lib/server/solanaRpc";
 import { addEvents } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
@@ -24,6 +24,23 @@ function authorized(req: Request): boolean {
 export async function GET(req: Request) {
   if (!authorized(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
+  // Read-only diagnostic: ?debug=<wallet>&limit=N parses that wallet's recent
+  // txs without touching the cursor or ingesting — confirms detection on real data.
+  const url = new URL(req.url);
+  const dbg = url.searchParams.get("debug");
+  if (dbg) {
+    try {
+      const limit = Number(url.searchParams.get("limit")) || 5;
+      const rows = await debugWalletSwaps(dbg, limit);
+      return NextResponse.json({ ok: true, debug: dbg, rows });
+    } catch (e) {
+      return NextResponse.json(
+        { ok: false, error: (e as Error).message },
+        { status: 500 },
+      );
+    }
   }
 
   let parsed;

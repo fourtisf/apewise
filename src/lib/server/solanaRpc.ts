@@ -248,3 +248,45 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
 
   return out;
 }
+
+/**
+ * Diagnostic (read-only): parse a wallet's most recent transactions WITHOUT
+ * touching the poll cursor or ingesting. Lets you confirm real swaps are
+ * detected correctly. Exposed via /api/ingest/rpc-poll?debug=<address>.
+ */
+export async function debugWalletSwaps(
+  address: string,
+  limit = 5,
+): Promise<
+  Array<{ sig?: string; minsAgo?: number; err: boolean; parsed: SmartEvent | null }>
+> {
+  const { getSolPriceUsd } = await import("./market");
+  const solPrice = await getSolPriceUsd();
+  const sigs = await rpc<SigInfo[]>("getSignaturesForAddress", [
+    address,
+    { limit: Math.min(Math.max(1, limit), 25) },
+  ]);
+  const wallet: SmartWallet = { address, segment: "smart", label: "debug" };
+  const out: Array<{
+    sig?: string;
+    minsAgo?: number;
+    err: boolean;
+    parsed: SmartEvent | null;
+  }> = [];
+  for (const s of sigs || []) {
+    await delay(Number(process.env.RPC_CALL_DELAY_MS) || 150);
+    const tx = await rpc<RpcTx>("getTransaction", [
+      s.signature,
+      { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" },
+    ]);
+    out.push({
+      sig: s.signature?.slice(0, 16),
+      minsAgo: s.blockTime
+        ? Math.round((Date.now() / 1000 - s.blockTime) / 60)
+        : undefined,
+      err: !!s.err,
+      parsed: tx ? parseRpcSwap(tx, wallet, solPrice) : null,
+    });
+  }
+  return out;
+}

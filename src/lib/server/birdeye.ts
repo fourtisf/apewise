@@ -51,11 +51,9 @@ export async function getTopTraders(limit = 10): Promise<BirdeyeTrader[]> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 7000);
   try {
+    // gainers-losers caps at limit=10; over that returns 400.
     const res = await fetch(
-      `${BASE}/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=${Math.max(
-        limit,
-        10,
-      )}`,
+      `${BASE}/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=10`,
       { headers: hdrs(), signal: ctrl.signal },
     );
     if (!res.ok) return cache?.traders.slice(0, limit) || [];

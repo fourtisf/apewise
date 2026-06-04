@@ -67,7 +67,7 @@ let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
   try {
     const res = await fetch(
-      "https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=50",
+      "https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=0&limit=10",
       {
         headers: {
           "X-API-KEY": process.env.BIRDEYE_API_KEY,

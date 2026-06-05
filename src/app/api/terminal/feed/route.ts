@@ -128,8 +128,13 @@ function smartResponse(tracked: SmartEvent[]) {
 export async function GET() {
   const tracked = await allEvents();
   const freshMs = (Number(process.env.TERMINAL_FRESH_MIN) || 45) * 60_000;
-  const trackedFresh =
-    tracked.length > 0 && Date.now() - tracked[0].ts <= freshMs;
+  // Use the newest ts in the buffer, not tracked[0]: addEvents() prepends in
+  // ingestion order (RPC batches are grouped by wallet, not globally sorted by
+  // ts), so index 0 isn't guaranteed to be the most recent swap. A single
+  // older-but-freshly-ingested event must not flip the terminal to market mode.
+  let newestTs = 0;
+  for (const e of tracked) if (e.ts > newestTs) newestTs = e.ts;
+  const trackedFresh = tracked.length > 0 && Date.now() - newestTs <= freshMs;
 
   if (trackedFresh) return smartResponse(tracked);
 

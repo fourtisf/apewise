@@ -14,7 +14,8 @@
  * webhook(s) for the same URL, so duplicates never pile up (a duplicate would
  * make Helius deliver every swap twice → duplicate alerts + wasted credits).
  */
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 
 const apiKey = process.env.HELIUS_API_KEY;
 const webhookURL = process.env.WEBHOOK_URL;
@@ -167,6 +168,34 @@ if (!res.ok) {
     `✗ Helius webhook registration failed (HTTP ${res.status}). See body above.`,
   );
   process.exit(1);
+}
+
+// Write the resolved set to a snapshot the app reads when matching incoming
+// webhooks (data/tracked-wallets.json). This keeps the ingest match-set IDENTICAL
+// to what we just registered — the live Birdeye leaderboard drifts by the minute,
+// so without this, swaps from registered-but-since-drifted wallets get dropped
+// (parsed:0), and the live fetch in the request path made responses slow (499).
+const snapshot = [];
+const seenAddr = new Set();
+for (const w of manual) {
+  if (w?.address && !seenAddr.has(w.address)) {
+    seenAddr.add(w.address);
+    snapshot.push({ address: w.address, segment: w.segment || "smart", label: w.label });
+  }
+}
+for (const a of [...birdeye, ...gmgn]) {
+  if (a && !seenAddr.has(a)) {
+    seenAddr.add(a);
+    snapshot.push({ address: a, segment: "smart", label: "Smart" });
+  }
+}
+const snapshotFile = process.env.TRACKED_WALLETS_FILE || "data/tracked-wallets.json";
+try {
+  await mkdir(path.dirname(snapshotFile), { recursive: true });
+  await writeFile(snapshotFile, JSON.stringify(snapshot));
+  console.log(`✓ Wrote ${snapshot.length} wallet(s) to ${snapshotFile} (ingest match set)`);
+} catch (e) {
+  console.warn("Could not write tracked-wallets snapshot:", e.message);
 }
 
 // Idempotent cleanup: the fresh webhook now exists, so delete any OTHER webhook

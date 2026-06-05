@@ -36,6 +36,7 @@ export async function POST(req: Request) {
 
   const wallets = await walletMap();
   const parsed: SmartEvent[] = [];
+  let matched = 0; // txs whose swap involved a tracked wallet
 
   for (const tx of txs) {
     const involved = new Set<string>();
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
     for (const addr of involved) {
       const wallet = wallets.get(addr);
       if (!wallet) continue;
+      matched++;
       const ev = await parseHeliusTx(tx, wallet);
       if (ev) parsed.push(ev);
       break; // one event per tx
@@ -59,6 +61,17 @@ export async function POST(req: Request) {
   await Promise.allSettled(parsed.map((e) => enrichEvent(e)));
   const fresh = await addEvents(parsed);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
+
+  // Ops visibility: one line per delivery so a silent parsed:0 is diagnosable
+  // (matched=0 → wallet not in the tracked set; matched>0 & parsed=0 → the swap
+  // shape didn't parse). INGEST_DEBUG=true also dumps the first non-parsing tx so
+  // the real (aggregator) swap structure can be inspected.
+  console.log(
+    `[helius] txs=${txs.length} matched=${matched} parsed=${parsed.length} ingested=${fresh.length}`,
+  );
+  if (process.env.INGEST_DEBUG === "true" && parsed.length < txs.length && txs[0]) {
+    console.log("[helius] sample tx:", JSON.stringify(txs[0]).slice(0, 2000));
+  }
 
   return NextResponse.json({
     ok: true,

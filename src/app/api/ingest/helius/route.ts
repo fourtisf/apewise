@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { walletMap } from "@/lib/server/wallets";
-import { parseHeliusTx, type HeliusTx } from "@/lib/server/helius";
+import { parseHeliusTx, involvedAccounts, type HeliusTx } from "@/lib/server/helius";
 import { addEvents, type SmartEvent } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
+import { getSolPriceUsd } from "@/lib/server/market";
 import { sendAlert } from "@/lib/server/alerts";
 
 export const runtime = "nodejs";
@@ -34,22 +35,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "bad json" }, { status: 400 });
   }
 
-  const wallets = await walletMap();
+  const [wallets, solPrice] = await Promise.all([walletMap(), getSolPriceUsd()]);
   const parsed: SmartEvent[] = [];
+  let matched = 0; // txs whose swap involved a tracked wallet
 
   for (const tx of txs) {
-    const involved = new Set<string>();
-    const sw = tx.events?.swap;
-    for (const leg of [...(sw?.tokenInputs || []), ...(sw?.tokenOutputs || [])]) {
-      if (leg.userAccount) involved.add(leg.userAccount);
-    }
-    if (sw?.nativeInput?.account) involved.add(sw.nativeInput.account);
-    if (sw?.nativeOutput?.account) involved.add(sw.nativeOutput.account);
-
-    for (const addr of involved) {
+    for (const addr of involvedAccounts(tx)) {
       const wallet = wallets.get(addr);
       if (!wallet) continue;
-      const ev = await parseHeliusTx(tx, wallet);
+      matched++;
+      const ev = parseHeliusTx(tx, wallet, solPrice);
       if (ev) parsed.push(ev);
       break; // one event per tx
     }
@@ -59,6 +54,17 @@ export async function POST(req: Request) {
   await Promise.allSettled(parsed.map((e) => enrichEvent(e)));
   const fresh = await addEvents(parsed);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
+
+  // Ops visibility: one line per delivery so a silent parsed:0 is diagnosable
+  // (matched=0 → wallet not in the tracked set; matched>0 & parsed=0 → the swap
+  // shape didn't parse). INGEST_DEBUG=true also dumps the first non-parsing tx so
+  // the real (aggregator) swap structure can be inspected.
+  console.log(
+    `[helius] txs=${txs.length} matched=${matched} parsed=${parsed.length} ingested=${fresh.length}`,
+  );
+  if (process.env.INGEST_DEBUG === "true" && parsed.length < txs.length && txs[0]) {
+    console.log("[helius] sample tx:", JSON.stringify(txs[0]).slice(0, 2000));
+  }
 
   return NextResponse.json({
     ok: true,

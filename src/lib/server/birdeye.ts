@@ -44,27 +44,36 @@ export function parseTrader(r: unknown): BirdeyeTrader | null {
 let cache: { at: number; traders: BirdeyeTrader[] } | null = null;
 const TTL = 5 * 60_000;
 const PAGE = 10; // gainers-losers caps at limit=10; over that returns 400.
+const PAGE_DELAY = Number(process.env.BIRDEYE_PAGE_DELAY_MS) || 600;
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Fetch one gainers-losers page (offset, limit=10). null = request failed. */
+/** Fetch one gainers-losers page (offset, limit=10). null = request failed.
+ *  Retries once on 429 (free tier is ~1 rps) after a short backoff. */
 async function fetchPage(offset: number): Promise<BirdeyeTrader[] | null> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 7000);
-  try {
-    const res = await fetch(
-      `${BASE}/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
-      { headers: hdrs(), signal: ctrl.signal },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as { data?: unknown };
-    const d = json?.data as { items?: unknown[] } | unknown[] | undefined;
-    const items = Array.isArray(d) ? d : d?.items || [];
-    return (Array.isArray(items) ? items : [])
-      .map(parseTrader)
-      .filter((x): x is BirdeyeTrader => x != null && x.pnlUsd > 0);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(t);
+  for (let attempt = 0; ; attempt++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 7000);
+    try {
+      const res = await fetch(
+        `${BASE}/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
+        { headers: hdrs(), signal: ctrl.signal },
+      );
+      if (res.status === 429 && attempt < 1) {
+        await delay(1200);
+        continue; // finally clears the timer, then retry this page
+      }
+      if (!res.ok) return null;
+      const json = (await res.json()) as { data?: unknown };
+      const d = json?.data as { items?: unknown[] } | unknown[] | undefined;
+      const items = Array.isArray(d) ? d : d?.items || [];
+      return (Array.isArray(items) ? items : [])
+        .map(parseTrader)
+        .filter((x): x is BirdeyeTrader => x != null && x.pnlUsd > 0);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(t);
+    }
   }
 }
 
@@ -80,6 +89,7 @@ export async function getTopTraders(limit = 10): Promise<BirdeyeTrader[]> {
   const seen = new Set<string>();
   const all: BirdeyeTrader[] = [];
   for (let i = 0; i < pages; i++) {
+    if (i > 0) await delay(PAGE_DELAY); // pace pages — free tier rate-limits hard
     const page = await fetchPage(i * PAGE);
     if (!page || page.length === 0) break;
     for (const tr of page) {

@@ -10,9 +10,12 @@
  *   node scripts/setup-helius-webhook.mjs
  *
  * Wallets are read from data/smart-wallets.json (or $SMART_WALLETS_FILE).
- * Manage/delete webhooks later in the Helius dashboard.
+ * Re-running is safe: after creating the fresh webhook it removes any older
+ * webhook(s) for the same URL, so duplicates never pile up (a duplicate would
+ * make Helius deliver every swap twice → duplicate alerts + wasted credits).
  */
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 
 const apiKey = process.env.HELIUS_API_KEY;
 const webhookURL = process.env.WEBHOOK_URL;
@@ -70,43 +73,56 @@ let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
   const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 50));
   const PAGE = 10;
+  const pageDelayMs = Number(process.env.BIRDEYE_PAGE_DELAY_MS) || 600;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const pages = Math.min(Math.ceil(want / PAGE), 10); // hard cap ~100
   const seen = new Set();
-  for (let i = 0; i < pages && birdeye.length < want; i++) {
+  let stop = false;
+  for (let i = 0; i < pages && birdeye.length < want && !stop; i++) {
     const offset = i * PAGE;
-    try {
-      const res = await fetch(
-        `https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
-        {
-          headers: {
-            "X-API-KEY": process.env.BIRDEYE_API_KEY,
-            "x-chain": "solana",
-            accept: "application/json",
+    if (i > 0) await sleep(pageDelayMs); // free tier ~1 rps — pace the pages
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(
+          `https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
+          {
+            headers: {
+              "X-API-KEY": process.env.BIRDEYE_API_KEY,
+              "x-chain": "solana",
+              accept: "application/json",
+            },
           },
-        },
-      );
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        console.warn(
-          `Birdeye request failed (${res.status}) at offset ${offset}: ${body.slice(0, 300)}`,
         );
+        if (res.status === 429 && attempt === 0) {
+          await sleep(1500); // back off once on rate-limit, then retry this page
+          continue;
+        }
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          console.warn(
+            `Birdeye request failed (${res.status}) at offset ${offset}: ${body.slice(0, 300)}`,
+          );
+          stop = true;
+          break;
+        }
+        const json = await res.json();
+        const items = json?.data?.items || json?.data || [];
+        const page = (Array.isArray(items) ? items : [])
+          .map((t) => t.address || t.owner || t.wallet)
+          .filter(Boolean);
+        for (const a of page) {
+          if (!seen.has(a)) {
+            seen.add(a);
+            birdeye.push(a);
+          }
+        }
+        if (page.length < PAGE) stop = true; // last page
+        break;
+      } catch (e) {
+        console.warn("Birdeye fetch failed:", e.message);
+        stop = true;
         break;
       }
-      const json = await res.json();
-      const items = json?.data?.items || json?.data || [];
-      const page = (Array.isArray(items) ? items : [])
-        .map((t) => t.address || t.owner || t.wallet)
-        .filter(Boolean);
-      for (const a of page) {
-        if (!seen.has(a)) {
-          seen.add(a);
-          birdeye.push(a);
-        }
-      }
-      if (page.length < PAGE) break; // last page
-    } catch (e) {
-      console.warn("Birdeye fetch failed:", e.message);
-      break;
     }
   }
   console.log(`Birdeye: sourced ${birdeye.length} wallets`);
@@ -140,17 +156,81 @@ const res = await fetch(`https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`, 
   body: JSON.stringify(body),
 });
 
+const text = await res.text();
 console.log("HTTP", res.status);
-console.log(await res.text());
+console.log(text);
 console.log(
   `\nSources — birdeye ${birdeye.length}, gmgn ${gmgn.length}, manual ${manual.length}` +
     ` → ${accountAddresses.length} unique wallet(s).`,
 );
-if (res.ok) {
-  console.log(`✓ Tracking ${accountAddresses.length} wallet(s) -> ${webhookURL}`);
-} else {
+if (!res.ok) {
   console.error(
     `✗ Helius webhook registration failed (HTTP ${res.status}). See body above.`,
   );
   process.exit(1);
 }
+
+// Write the resolved set to a snapshot the app reads when matching incoming
+// webhooks (data/tracked-wallets.json). This keeps the ingest match-set IDENTICAL
+// to what we just registered — the live Birdeye leaderboard drifts by the minute,
+// so without this, swaps from registered-but-since-drifted wallets get dropped
+// (parsed:0), and the live fetch in the request path made responses slow (499).
+const snapshot = [];
+const seenAddr = new Set();
+for (const w of manual) {
+  if (w?.address && !seenAddr.has(w.address)) {
+    seenAddr.add(w.address);
+    snapshot.push({ address: w.address, segment: w.segment || "smart", label: w.label });
+  }
+}
+for (const a of [...birdeye, ...gmgn]) {
+  if (a && !seenAddr.has(a)) {
+    seenAddr.add(a);
+    snapshot.push({ address: a, segment: "smart", label: "Smart" });
+  }
+}
+const snapshotFile = process.env.TRACKED_WALLETS_FILE || "data/tracked-wallets.json";
+try {
+  await mkdir(path.dirname(snapshotFile), { recursive: true });
+  await writeFile(snapshotFile, JSON.stringify(snapshot));
+  console.log(`✓ Wrote ${snapshot.length} wallet(s) to ${snapshotFile} (ingest match set)`);
+} catch (e) {
+  console.warn("Could not write tracked-wallets snapshot:", e.message);
+}
+
+// Idempotent cleanup: the fresh webhook now exists, so delete any OTHER webhook
+// pointing at the same URL (leftovers from previous runs). Re-running therefore
+// converges to exactly one webhook instead of piling up duplicates. Done AFTER a
+// successful create so a failure never leaves us with zero webhooks.
+let newID;
+try {
+  newID = JSON.parse(text)?.webhookID;
+} catch {
+  /* non-JSON body — skip cleanup */
+}
+if (newID) {
+  try {
+    const listRes = await fetch(
+      `https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`,
+    );
+    if (listRes.ok) {
+      const all = await listRes.json();
+      const stale = (Array.isArray(all) ? all : []).filter(
+        (w) => w?.webhookURL === webhookURL && w?.webhookID !== newID,
+      );
+      for (const w of stale) {
+        const del = await fetch(
+          `https://api.helius.xyz/v0/webhooks/${w.webhookID}?api-key=${apiKey}`,
+          { method: "DELETE" },
+        );
+        console.log(
+          `Removed stale webhook ${w.webhookID} (${del.ok ? "ok" : "HTTP " + del.status})`,
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("Stale-webhook cleanup skipped:", e.message);
+  }
+}
+
+console.log(`✓ Tracking ${accountAddresses.length} wallet(s) -> ${webhookURL}`);

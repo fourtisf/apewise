@@ -1,34 +1,17 @@
+import Image from "next/image";
 import { cn } from "@/lib/cn";
 
-/** ApeWise mark — a smart-money uptrend inside a rounded tile. */
+/** ApeWise mark — the King Kong gorilla logo. */
 export function ApeWiseMark({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 32 32"
-      className={className}
-      fill="none"
-      role="img"
-      aria-label="ApeWise"
-    >
-      <rect
-        x="1.25"
-        y="1.25"
-        width="29.5"
-        height="29.5"
-        rx="9"
-        fill="#14161B"
-        stroke="var(--border-strong)"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M7.5 21.5 L13.5 15 L17.5 18.5 L24.5 9.5"
-        stroke="var(--accent)"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="24.5" cy="9.5" r="2.6" fill="var(--accent)" />
-    </svg>
+    <Image
+      src="/apewise-logo.png"
+      alt="ApeWise"
+      width={64}
+      height={64}
+      priority
+      className={cn("rounded-lg object-cover", className)}
+    />
   );
 }
 

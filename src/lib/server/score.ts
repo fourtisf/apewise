@@ -8,6 +8,7 @@ export interface WalletScore {
   segment: Segment;
   winRate: number; // % of closed positions in profit
   pnlUsd: number; // realized PnL across closed positions (USD-at-swap proxy)
+  volumeUsd: number; // total observed swap volume (buys + sells), USD-at-swap
   trades: number;
   score: number; // ranking score
 }
@@ -53,9 +54,11 @@ export function scoreWallets(events: SmartEvent[], limit = 6): WalletScore[] {
   const scores: WalletScore[] = [];
   for (const [wallet, a] of byWallet) {
     let pnlUsd = 0;
+    let volumeUsd = 0;
     let closed = 0;
     let wins = 0;
     for (const t of a.tokens.values()) {
+      volumeUsd += t.buy + t.sell;
       if (t.buy > 0 && t.sell > 0) {
         const pnl = t.sell - t.buy;
         pnlUsd += pnl;
@@ -64,8 +67,11 @@ export function scoreWallets(events: SmartEvent[], limit = 6): WalletScore[] {
       }
     }
     const winRate = closed > 0 ? Math.round((wins / closed) * 100) : 0;
-    // Rank by realized PnL, lightly weighted by win-rate and activity.
-    const score = pnlUsd * (0.5 + winRate / 200) + a.trades * 50;
+    // Rank by realized PnL, lightly weighted by win-rate and activity. When no
+    // positions have closed yet (short window), PnL is 0 for everyone, so a tiny
+    // volume term keeps the ordering meaningful (busiest wallets first).
+    const score =
+      pnlUsd * (0.5 + winRate / 200) + a.trades * 50 + volumeUsd * 0.001;
     scores.push({
       wallet,
       walletShort: a.walletShort,
@@ -73,6 +79,7 @@ export function scoreWallets(events: SmartEvent[], limit = 6): WalletScore[] {
       segment: a.segment,
       winRate,
       pnlUsd: Math.round(pnlUsd),
+      volumeUsd: Math.round(volumeUsd),
       trades: a.trades,
       score,
     });

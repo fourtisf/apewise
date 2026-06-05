@@ -51,3 +51,24 @@ test("scoreWallets ranks higher realized PnL first", () => {
   ]);
   assert.ok(top[0].pnlUsd >= top[1].pnlUsd);
 });
+
+test("scoreWallets: volume sums both legs, even with no closed position", () => {
+  // Only sells observed (the buy leg predates the window): PnL stays 0, but the
+  // wallet still has real volume so the leaderboard can rank it (no false +$0).
+  const [w] = scoreWallets([
+    ev({ id: "s1", wallet: "W_SELL", action: "sell", token: "X", usd: 600 }),
+    ev({ id: "s2", wallet: "W_SELL", action: "sell", token: "Y", usd: 400 }),
+  ]);
+  assert.equal(w.pnlUsd, 0);
+  assert.equal(w.volumeUsd, 1000);
+  assert.equal(w.trades, 2);
+});
+
+test("scoreWallets: with zero PnL everywhere, busiest-by-volume ranks first", () => {
+  const top = scoreWallets([
+    ev({ id: "1", wallet: "SMALL", action: "buy", token: "A", usd: 100 }),
+    ev({ id: "2", wallet: "BIG", action: "buy", token: "B", usd: 9000 }),
+  ]);
+  assert.equal(top[0].pnlUsd, 0);
+  assert.equal(top[0].walletShort, "BIG");
+});

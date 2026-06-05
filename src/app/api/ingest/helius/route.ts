@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { walletMap } from "@/lib/server/wallets";
-import { parseHeliusTx, type HeliusTx } from "@/lib/server/helius";
+import { parseHeliusTx, involvedAccounts, type HeliusTx } from "@/lib/server/helius";
 import { addEvents, type SmartEvent } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
+import { getSolPriceUsd } from "@/lib/server/market";
 import { sendAlert } from "@/lib/server/alerts";
 
 export const runtime = "nodejs";
@@ -34,24 +35,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "bad json" }, { status: 400 });
   }
 
-  const wallets = await walletMap();
+  const [wallets, solPrice] = await Promise.all([walletMap(), getSolPriceUsd()]);
   const parsed: SmartEvent[] = [];
   let matched = 0; // txs whose swap involved a tracked wallet
 
   for (const tx of txs) {
-    const involved = new Set<string>();
-    const sw = tx.events?.swap;
-    for (const leg of [...(sw?.tokenInputs || []), ...(sw?.tokenOutputs || [])]) {
-      if (leg.userAccount) involved.add(leg.userAccount);
-    }
-    if (sw?.nativeInput?.account) involved.add(sw.nativeInput.account);
-    if (sw?.nativeOutput?.account) involved.add(sw.nativeOutput.account);
-
-    for (const addr of involved) {
+    for (const addr of involvedAccounts(tx)) {
       const wallet = wallets.get(addr);
       if (!wallet) continue;
       matched++;
-      const ev = await parseHeliusTx(tx, wallet);
+      const ev = parseHeliusTx(tx, wallet, solPrice);
       if (ev) parsed.push(ev);
       break; // one event per tx
     }

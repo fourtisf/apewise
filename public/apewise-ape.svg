@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" fill="none" role="img" aria-label="ApeWise — silverback mark">
+  <defs>
+    <linearGradient id="aw-tile" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c1e26"/>
+      <stop offset="1" stop-color="#0a0b0e"/>
+    </linearGradient>
+    <linearGradient id="aw-fur" x1="60" y1="9" x2="60" y2="95" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#dadae2"/>
+      <stop offset="1" stop-color="#bcbdc9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- premium tile -->
+  <rect x="4" y="4" width="112" height="112" rx="30" fill="url(#aw-tile)"/>
+  <rect x="4.75" y="4.75" width="110.5" height="110.5" rx="29.25" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5"/>
+
+  <!-- small tucked ears -->
+  <ellipse cx="28" cy="48" rx="5.5" ry="6.5" fill="url(#aw-fur)"/>
+  <ellipse cx="92" cy="48" rx="5.5" ry="6.5" fill="url(#aw-fur)"/>
+
+  <!-- massive head + sagittal crest, heavy jaw -->
+  <path d="M60 10 C46 10 35 17 31 30 C23 33 19 45 23 56 C26 67 33 80 45 87 C50 90 55 91 60 91 C65 91 70 90 75 87 C87 80 94 67 97 56 C101 45 97 33 89 30 C85 17 74 10 60 10 Z" fill="url(#aw-fur)"/>
+
+  <!-- heavy low brow ridge -->
+  <path d="M24 43 C34 35 47 35 60 40 C73 35 86 35 96 43 C92 53 80 50 70 46 C64 44 56 44 50 46 C40 50 28 53 24 43 Z" fill="#15171e"/>
+
+  <!-- deep-set, angled (fierce) eyes -->
+  <ellipse cx="47" cy="55" rx="6" ry="5.4" fill="#15171e" transform="rotate(-14 47 55)"/>
+  <ellipse cx="73" cy="55" rx="6" ry="5.4" fill="#15171e" transform="rotate(14 73 55)"/>
+  <circle cx="48.6" cy="53.2" r="1.5" fill="#f4f4f7"/>
+  <circle cx="74.6" cy="53.2" r="1.5" fill="#f4f4f7"/>
+
+  <!-- broad, flat gorilla nose with flared nostrils (one dark mass — no pig snout) -->
+  <path d="M60 63 C56 63 52 64 50 67 C47 70 47 74 51 76 C54 77.5 57 76 58 73.5 C59 75 61 75 62 73.5 C63 76 66 77.5 69 76 C73 74 73 70 70 67 C68 64 64 63 60 63 Z" fill="#15171e"/>
+  <!-- subtle nose-bridge ridge up to the brow -->
+  <path d="M60 47 C58.5 53 58.5 58 60 63 C61.5 58 61.5 53 60 47 Z" fill="#15171e" opacity="0.45"/>
+  <!-- firm, stern mouth -->
+  <path d="M51 84 C56 82 64 82 69 84" fill="none" stroke="#15171e" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

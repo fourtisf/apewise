@@ -50,7 +50,10 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
   if (process.env.BIRDEYE_API_KEY) {
     try {
       const { getBirdeyeSmartWallets } = await import("./birdeye");
-      birdeye = await getBirdeyeSmartWallets(50);
+      // Match the count the webhook registers (BIRDEYE_TRACK_LIMIT) so the live
+      // walletMap and the registered address set stay aligned.
+      const limit = Number(process.env.BIRDEYE_TRACK_LIMIT) || 50;
+      birdeye = await getBirdeyeSmartWallets(limit);
     } catch {
       birdeye = [];
     }

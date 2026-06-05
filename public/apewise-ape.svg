@@ -1,18 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" fill="none" role="img" aria-label="ApeWise gorilla">
-  <defs>
-    <linearGradient id="aw-tile" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1c1e26"/><stop offset="1" stop-color="#0a0b0e"/>
-    </linearGradient>
-    <linearGradient id="aw-fur" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/><stop offset="0.6" stop-color="#d7d8e0"/><stop offset="1" stop-color="#b4b5c1"/>
-    </linearGradient>
-  </defs>
+  <defs><linearGradient id="aw-tile" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#141519"/><stop offset="1" stop-color="#060608"/></linearGradient><linearGradient id="aw-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0f0f4"/><stop offset="1" stop-color="#9a9ba6"/></linearGradient></defs>
   <rect x="4" y="4" width="112" height="112" rx="30" fill="url(#aw-tile)"/>
-  <rect x="4.75" y="4.75" width="110.5" height="110.5" rx="29.25" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5"/>
-  <g transform="translate(18.05,13.00) scale(0.07769)">
-<g transform="translate(0.000000,1210.000000) scale(0.100000,-0.100000)"
-fill="url(#aw-fur)" stroke="none">
-<path d="M2574 12075 c-23 -35 -72 -63 -133 -76 -28 -6 -75 -26 -103 -46 -29
+  <rect x="4.75" y="4.75" width="110.5" height="110.5" rx="29.25" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1.5"/>
+  <g transform="translate(18.05,13.00) scale(0.07769)"><g transform="translate(0,1210) scale(0.1,-0.1)" fill="#0c0d11" stroke="url(#aw-rim)" stroke-width="150" stroke-linejoin="round"><path d="M2574 12075 c-23 -35 -72 -63 -133 -76 -28 -6 -75 -26 -103 -46 -29
 -19 -68 -41 -86 -49 -19 -8 -54 -33 -77 -57 -23 -23 -63 -60 -89 -81 -44 -35
 -103 -114 -162 -215 -30 -51 -74 -270 -74 -370 0 -93 -15 -140 -55 -167 -15
 -11 -48 -38 -74 -60 -25 -23 -62 -49 -81 -59 -19 -10 -54 -35 -77 -56 -24 -22
@@ -93,7 +83,5 @@ fill="url(#aw-fur)" stroke="none">
 -40 10 -129 22 -198 11 -69 23 -187 25 -263 5 -163 -4 -202 -73 -292 -25 -33
 -54 -77 -65 -97 -39 -75 -85 -77 -153 -6 -85 88 -114 197 -83 308 9 30 21 82
 27 114 7 32 29 91 50 130 20 40 45 99 55 131 9 33 28 78 41 101 14 23 36 70
-49 105 33 83 50 94 85 59z"/>
-</g>
-  </g>
+49 105 33 83 50 94 85 59z"/></g></g>
 </svg>

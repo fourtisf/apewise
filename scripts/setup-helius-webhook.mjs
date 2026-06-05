@@ -10,7 +10,9 @@
  *   node scripts/setup-helius-webhook.mjs
  *
  * Wallets are read from data/smart-wallets.json (or $SMART_WALLETS_FILE).
- * Manage/delete webhooks later in the Helius dashboard.
+ * Re-running is safe: after creating the fresh webhook it removes any older
+ * webhook(s) for the same URL, so duplicates never pile up (a duplicate would
+ * make Helius deliver every swap twice → duplicate alerts + wasted credits).
  */
 import { readFile } from "node:fs/promises";
 
@@ -140,17 +142,53 @@ const res = await fetch(`https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`, 
   body: JSON.stringify(body),
 });
 
+const text = await res.text();
 console.log("HTTP", res.status);
-console.log(await res.text());
+console.log(text);
 console.log(
   `\nSources — birdeye ${birdeye.length}, gmgn ${gmgn.length}, manual ${manual.length}` +
     ` → ${accountAddresses.length} unique wallet(s).`,
 );
-if (res.ok) {
-  console.log(`✓ Tracking ${accountAddresses.length} wallet(s) -> ${webhookURL}`);
-} else {
+if (!res.ok) {
   console.error(
     `✗ Helius webhook registration failed (HTTP ${res.status}). See body above.`,
   );
   process.exit(1);
 }
+
+// Idempotent cleanup: the fresh webhook now exists, so delete any OTHER webhook
+// pointing at the same URL (leftovers from previous runs). Re-running therefore
+// converges to exactly one webhook instead of piling up duplicates. Done AFTER a
+// successful create so a failure never leaves us with zero webhooks.
+let newID;
+try {
+  newID = JSON.parse(text)?.webhookID;
+} catch {
+  /* non-JSON body — skip cleanup */
+}
+if (newID) {
+  try {
+    const listRes = await fetch(
+      `https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`,
+    );
+    if (listRes.ok) {
+      const all = await listRes.json();
+      const stale = (Array.isArray(all) ? all : []).filter(
+        (w) => w?.webhookURL === webhookURL && w?.webhookID !== newID,
+      );
+      for (const w of stale) {
+        const del = await fetch(
+          `https://api.helius.xyz/v0/webhooks/${w.webhookID}?api-key=${apiKey}`,
+          { method: "DELETE" },
+        );
+        console.log(
+          `Removed stale webhook ${w.webhookID} (${del.ok ? "ok" : "HTTP " + del.status})`,
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("Stale-webhook cleanup skipped:", e.message);
+  }
+}
+
+console.log(`✓ Tracking ${accountAddresses.length} wallet(s) -> ${webhookURL}`);

@@ -72,43 +72,56 @@ let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
   const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 50));
   const PAGE = 10;
+  const pageDelayMs = Number(process.env.BIRDEYE_PAGE_DELAY_MS) || 600;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const pages = Math.min(Math.ceil(want / PAGE), 10); // hard cap ~100
   const seen = new Set();
-  for (let i = 0; i < pages && birdeye.length < want; i++) {
+  let stop = false;
+  for (let i = 0; i < pages && birdeye.length < want && !stop; i++) {
     const offset = i * PAGE;
-    try {
-      const res = await fetch(
-        `https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
-        {
-          headers: {
-            "X-API-KEY": process.env.BIRDEYE_API_KEY,
-            "x-chain": "solana",
-            accept: "application/json",
+    if (i > 0) await sleep(pageDelayMs); // free tier ~1 rps — pace the pages
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(
+          `https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${offset}&limit=${PAGE}`,
+          {
+            headers: {
+              "X-API-KEY": process.env.BIRDEYE_API_KEY,
+              "x-chain": "solana",
+              accept: "application/json",
+            },
           },
-        },
-      );
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        console.warn(
-          `Birdeye request failed (${res.status}) at offset ${offset}: ${body.slice(0, 300)}`,
         );
+        if (res.status === 429 && attempt === 0) {
+          await sleep(1500); // back off once on rate-limit, then retry this page
+          continue;
+        }
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          console.warn(
+            `Birdeye request failed (${res.status}) at offset ${offset}: ${body.slice(0, 300)}`,
+          );
+          stop = true;
+          break;
+        }
+        const json = await res.json();
+        const items = json?.data?.items || json?.data || [];
+        const page = (Array.isArray(items) ? items : [])
+          .map((t) => t.address || t.owner || t.wallet)
+          .filter(Boolean);
+        for (const a of page) {
+          if (!seen.has(a)) {
+            seen.add(a);
+            birdeye.push(a);
+          }
+        }
+        if (page.length < PAGE) stop = true; // last page
+        break;
+      } catch (e) {
+        console.warn("Birdeye fetch failed:", e.message);
+        stop = true;
         break;
       }
-      const json = await res.json();
-      const items = json?.data?.items || json?.data || [];
-      const page = (Array.isArray(items) ? items : [])
-        .map((t) => t.address || t.owner || t.wallet)
-        .filter(Boolean);
-      for (const a of page) {
-        if (!seen.has(a)) {
-          seen.add(a);
-          birdeye.push(a);
-        }
-      }
-      if (page.length < PAGE) break; // last page
-    } catch (e) {
-      console.warn("Birdeye fetch failed:", e.message);
-      break;
     }
   }
   console.log(`Birdeye: sourced ${birdeye.length} wallets`);

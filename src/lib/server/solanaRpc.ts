@@ -148,28 +148,43 @@ export function activeRpcUrl(): string {
   return process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
 }
 
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Single JSON-RPC call, fail-soft (returns null instead of throwing). Public RPCs
+ * throttle aggressively (HTTP 429 / 5xx), and a throttled `getTransaction` would
+ * silently drop a real swap — fewer wallets, more latency. So transient throttles
+ * are retried with backoff (RPC_MAX_RETRIES, default 2); a clean failure is not.
+ */
 async function rpc<T>(method: string, params: unknown[]): Promise<T | null> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 8000);
-  try {
-    const res = await fetch(activeRpcUrl(), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) return null;
-    const j = (await res.json()) as { result?: T; error?: unknown };
-    if (j.error) return null;
-    return (j.result ?? null) as T | null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(t);
+  const retries = Math.max(0, Number(process.env.RPC_MAX_RETRIES) || 2);
+  for (let attempt = 0; ; attempt++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    let transient = false;
+    try {
+      const res = await fetch(activeRpcUrl(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        signal: ctrl.signal,
+      });
+      if (res.ok) {
+        const j = (await res.json()) as { result?: T; error?: unknown };
+        if (j.error) return null;
+        return (j.result ?? null) as T | null;
+      }
+      // 429 (rate limit) and 5xx are worth a retry; other statuses are not.
+      transient = res.status === 429 || res.status >= 500;
+    } catch {
+      transient = true; // network blip / abort — retry
+    } finally {
+      clearTimeout(t);
+    }
+    if (!transient || attempt >= retries) return null;
+    await delay(250 * (attempt + 1)); // 250ms, 500ms, …
   }
 }
-
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Per-wallet cursor (newest processed signature). Module-level → persists across
 // requests within the single app process. `initialized` baselines the first

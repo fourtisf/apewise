@@ -100,9 +100,25 @@ export function chartKeyboard(mint?: string) {
 const lastAlertAt = new Map<string, number>();
 const COOLDOWN = (Number(process.env.ALERT_COOLDOWN_SEC) || 60) * 1000;
 
+/**
+ * Only alert on swaps that just happened. The RPC poll can surface old on-chain
+ * txs (e.g. a wallet's most-recent activity, or after a restart/lookback); posting
+ * those would make the channel look stale ("not realtime"). A swap older than
+ * ALERT_MAX_AGE_MIN (default 30) is stored/scored but never broadcast.
+ */
+export function withinAlertWindow(ts?: number, now = Date.now()): boolean {
+  if (!ts) return true; // unknown time → don't suppress (Helius webhooks are realtime)
+  const maxAgeMin = Number(process.env.ALERT_MAX_AGE_MIN);
+  const maxAgeMs = (Number.isFinite(maxAgeMin) && maxAgeMin > 0 ? maxAgeMin : 30) * 60_000;
+  return now - ts <= maxAgeMs;
+}
+
 function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (ev.risk?.verdict === "risk" && process.env.ALERT_ON_RISK !== "true") {
     return { ok: false, reason: "risk-suppressed" };
+  }
+  if (!withinAlertWindow(ev.ts)) {
+    return { ok: false, reason: "stale" };
   }
   const key = `${ev.wallet}:${ev.tokenMint || ev.token}`;
   const now = Date.now();

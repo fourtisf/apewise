@@ -14,7 +14,9 @@ function derive(events: SmartEvent[]) {
   const day = events.filter((e) => now - e.ts < 24 * 3600 * 1000);
   const hour = events.filter((e) => now - e.ts < 3600 * 1000);
   const src = hour.length ? hour : day.length ? day : events;
-  const base = day.length ? day : events;
+  // KPIs describe the real rolling 24h window — never silently widen to all-time,
+  // which would let a stalled ingest keep reporting day-old swaps as "24h".
+  const base = day;
 
   const feed = events.slice(0, 30).map((e) => ({
     id: e.id,
@@ -73,30 +75,63 @@ function derive(events: SmartEvent[]) {
   return { feed, kpis, inflows };
 }
 
-/**
- * Terminal data: scored smart-money (Helius) when configured, else REAL Solana
- * market trades (GeckoTerminal, no key), else demo. `source` tells the UI which.
- */
-export async function GET() {
-  const tracked = await allEvents();
-  if (tracked.length > 0) {
-    const { feed, kpis, inflows } = derive(tracked);
-    const topWallets = scoreWallets(tracked, 6).map((w) => ({
+/** Build the scored smart-money leaderboard. Falls back to a volume ranking when
+ *  no positions have closed yet (so the panel shows real $ instead of all "+$0"). */
+function smartLeaderboard(tracked: SmartEvent[]) {
+  const scored = scoreWallets(tracked, 50); // rank from a wide pool, slice to 6 below
+  const hasPnl = scored.some((w) => w.pnlUsd !== 0);
+  if (hasPnl) {
+    return scored.slice(0, 6).map((w) => ({
       wallet: w.walletShort,
       segment: w.segment,
       winRate: w.winRate,
       pnlUsd: w.pnlUsd,
       trades: w.trades,
     }));
-    return NextResponse.json({
-      live: true,
-      source: "smart",
-      events: feed,
-      kpis,
-      inflows,
-      topWallets,
-    });
   }
+  // No closed round-trips yet: rank by observed swap volume. The UI renders these
+  // as "Top Traders · live" with the real $ figure (never a misleading +$0).
+  return [...scored]
+    .sort((a, b) => b.volumeUsd - a.volumeUsd)
+    .slice(0, 6)
+    .map((w) => ({
+      wallet: w.walletShort,
+      segment: w.segment,
+      winRate: 0,
+      pnlUsd: 0,
+      trades: w.trades,
+      volumeUsd: w.volumeUsd,
+    }));
+}
+
+function smartResponse(tracked: SmartEvent[]) {
+  const { feed, kpis, inflows } = derive(tracked);
+  return NextResponse.json({
+    live: true,
+    source: "smart",
+    events: feed,
+    kpis,
+    inflows,
+    topWallets: smartLeaderboard(tracked),
+  });
+}
+
+/**
+ * Terminal data: scored smart-money (Helius/RPC) when fresh, else REAL Solana
+ * market trades (GeckoTerminal, no key), else demo. `source` tells the UI which.
+ *
+ * Freshness gate: tracked events are only treated as "live smart money" while the
+ * newest one is recent (TERMINAL_FRESH_MIN, default 45m). Once the ingest stalls
+ * we yield to the live market feed instead of freezing on day-old swaps — that
+ * was the "signals 25h ago / 3 active wallets" symptom.
+ */
+export async function GET() {
+  const tracked = await allEvents();
+  const freshMs = (Number(process.env.TERMINAL_FRESH_MIN) || 45) * 60_000;
+  const trackedFresh =
+    tracked.length > 0 && Date.now() - tracked[0].ts <= freshMs;
+
+  if (trackedFresh) return smartResponse(tracked);
 
   const market = await getMarketSnapshot();
   if (market && market.events.length > 0) {
@@ -179,6 +214,10 @@ export async function GET() {
       topWallets,
     });
   }
+
+  // Market source is also down: if we still hold (stale) tracked events, show
+  // them rather than dropping all the way to demo.
+  if (tracked.length > 0) return smartResponse(tracked);
 
   return NextResponse.json({
     live: false,

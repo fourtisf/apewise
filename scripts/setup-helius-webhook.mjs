@@ -113,11 +113,59 @@ if (process.env.BIRDEYE_API_KEY) {
   console.log(`Birdeye: sourced ${birdeye.length} wallets`);
 }
 
+// Active traders on trending tokens (GeckoTerminal, free) — adds wallets that
+// are ACTUALLY trading hot memecoins right now, so the feed isn't just quiet
+// top-PnL whales. Set USE_ACTIVE_TRADERS=false to skip.
+let active = [];
+if (process.env.USE_ACTIVE_TRADERS !== "false") {
+  const minUsd = Number(process.env.ACTIVE_MIN_USD || 1000);
+  const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 15));
+  try {
+    const tp = await (
+      await fetch(
+        "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1",
+        { headers: { accept: "application/json" } },
+      )
+    ).json();
+    const pools = (tp?.data || [])
+      .map((p) => p?.attributes?.address)
+      .filter(Boolean)
+      .slice(0, wantPools);
+    const seen = new Set();
+    for (const addr of pools) {
+      try {
+        const tr = await (
+          await fetch(
+            `https://api.geckoterminal.com/api/v2/networks/solana/pools/${addr}/trades`,
+            { headers: { accept: "application/json" } },
+          )
+        ).json();
+        for (const t of tr?.data || []) {
+          const a = t?.attributes || {};
+          const w = a.tx_from_address;
+          if (w && (Number(a.volume_in_usd) || 0) >= minUsd && !seen.has(w)) {
+            seen.add(w);
+            active.push(w);
+          }
+        }
+      } catch {
+        /* skip this pool */
+      }
+      await new Promise((r) => setTimeout(r, 250)); // GeckoTerminal rate limit
+    }
+    console.log(`Active traders (GeckoTerminal): sourced ${active.length} wallets`);
+  } catch (e) {
+    console.warn("Active-trader source failed:", e.message);
+  }
+}
+
 // Resolve the full tracked set WITH segments (manual wins on label/segment),
 // and persist it so the app's walletMap matches exactly what the webhook
 // tracks — otherwise live re-sourcing could recognize fewer wallets and drop
 // their swaps. The app reads this file (see lib/server/wallets.ts).
 const trackedMap = new Map();
+for (const a of active)
+  if (a) trackedMap.set(a, { address: a, label: "Active", segment: "smart" });
 for (const a of [...birdeye, ...gmgn])
   if (a) trackedMap.set(a, { address: a, label: "Smart", segment: "smart" });
 for (const w of manual) if (w?.address) trackedMap.set(w.address, w);
@@ -184,7 +232,7 @@ console.log(keep ? `Updated existing webhook ${keep.webhookID}` : "Created new w
 console.log("HTTP", res.status);
 console.log(await res.text());
 console.log(
-  `\nSources — birdeye ${birdeye.length}, gmgn ${gmgn.length}, manual ${manual.length}` +
+  `\nSources — birdeye ${birdeye.length}, active ${active.length}, gmgn ${gmgn.length}, manual ${manual.length}` +
     ` → ${accountAddresses.length} unique wallet(s).`,
 );
 if (res.ok) {

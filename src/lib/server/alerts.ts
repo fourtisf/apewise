@@ -49,8 +49,11 @@ export async function postToChannel(
 
 export function fmtUsd(n?: number): string | null {
   if (n == null || !Number.isFinite(n)) return null;
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1000) return `$${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  const a = Math.abs(n);
+  if (a >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (a >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (a >= 1000) return `$${(n / 1000).toFixed(a >= 10_000 ? 0 : 1)}k`;
   return `$${Math.round(n)}`;
 }
 
@@ -62,7 +65,7 @@ const SEG_EMOJI: Record<SmartEvent["segment"], string> = {
 };
 
 const SEG_LABEL: Record<SmartEvent["segment"], string> = {
-  smart: "Smart money",
+  smart: "Smart",
   sniper: "Sniper",
   insider: "Insider",
   kol: "KOL",
@@ -129,11 +132,13 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
   }
 
   const verb = ev.action === "buy" ? "BUY" : "SELL";
-  const verbed = ev.action === "buy" ? "bought" : "sold";
-  const role = SEG_LABEL[ev.segment];
-  // Avoid "Smart money (smart)" when the label just repeats the segment.
-  const named =
-    ev.label && ev.label.toLowerCase() !== ev.segment ? ` (${ev.label})` : "";
+  const tag = SEG_LABEL[ev.segment]; // Smart / Sniper / Insider / KOL
+  // Only show a real custom label (e.g. a KOL's name) — not generic Smart/Active.
+  const name =
+    ev.label &&
+    !["smart", "active", ev.segment].includes(ev.label.toLowerCase())
+      ? ` <i>${ev.label}</i>`
+      : "";
 
   const metrics = [
     ev.liquidityUsd != null ? `💧 Liq ${fmtUsd(ev.liquidityUsd)}` : null,
@@ -142,9 +147,8 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
   ].filter(Boolean);
 
   const lines = [
-    `${SEG_EMOJI[ev.segment]} <b>SMART MONEY</b> · ${verb}`,
-    `<b>$${ev.token}</b> — ${role}${named}`,
-    `<code>${ev.walletShort}</code> ${verbed} <b>${fmtUsd(ev.amountUsd)}</b>`,
+    `${SEG_EMOJI[ev.segment]} <b>${verb}</b> · <b>$${ev.token}</b>`,
+    `${tag}${name} · <code>${ev.walletShort}</code> · <b>${fmtUsd(ev.amountUsd)}</b>`,
     metrics.length ? metrics.join("  ·  ") : null,
     riskLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,

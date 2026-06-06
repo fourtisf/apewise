@@ -101,9 +101,12 @@ export function seedFeed(count = 5): FeedEvent[] {
 }
 
 export function formatUsd(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1000) return `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
-  return `$${n}`;
+  const a = Math.abs(n);
+  if (a >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (a >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (a >= 1000) return `$${(n / 1000).toFixed(a >= 10000 ? 0 : 1)}k`;
+  return `$${Math.round(n)}`;
 }
 
 export function timeAgo(ts: number, now: number = Date.now()): string {

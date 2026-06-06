@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" fill="none">
+  <!-- ApeWise — X profile picture (circle-safe). Wordmark-free brand mark. -->
+  <defs><linearGradient id="brand" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5cffc4"/><stop offset="1" stop-color="#11bf86"/></linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="400" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6affcb"/><stop offset="1" stop-color="#0f9e72"/></linearGradient>
+    <radialGradient id="amb" cx="50%" cy="47%" r="52%"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.20"/><stop offset="0.6" stop-color="#2fe9a8" stop-opacity="0.05"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></radialGradient>
+    <filter id="gA" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="0.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="400" height="400" fill="#000000"/>
+  <rect width="400" height="400" fill="url(#amb)"/>
+  <circle cx="200" cy="200" r="185" fill="none" stroke="url(#ring)" stroke-opacity="0.55" stroke-width="3"/>
+  <g transform="translate(54.71 69.50) scale(8.7)"><g filter="url(#gA)">
+    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="url(#brand)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9.4 13.8 13.4 13.8" stroke="url(#brand)" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="26" cy="8" r="2.6" fill="url(#brand)"/></g></g>
+</svg>

@@ -95,6 +95,9 @@ source of truth: `<ApeWiseMonogram />` / `<BrandLockup />` in
 - `public/monogram.svg` — the mark on its own.
 - `public/logo.svg` — horizontal lockup (monogram + wordmark).
 - `src/app/icon.svg` — favicon: a simplified `A↗` variant that stays legible at 16 px.
+- `public/social/x-avatar.{svg,png}` — X profile picture (400×400, circle-safe).
+- `public/social/x-banner.{svg,png}` — X header (1500×500); content kept clear of the
+  bottom-left avatar overlap. PNGs render the wordmark in Space Grotesk (Clash Display stand-in).
 
 ### Copy & i18n
 

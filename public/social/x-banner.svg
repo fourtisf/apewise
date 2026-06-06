@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500" fill="none">
+  <!-- ApeWise — X header (1500x500). Avatar overlaps bottom-left; key content kept clear of it. -->
+  <defs><linearGradient id="brand" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5cffc4"/><stop offset="1" stop-color="#11bf86"/></linearGradient><filter id="gM" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="0.7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.16"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.09"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gridmask" cx="50%" cy="40%" r="62%"><stop offset="0" stop-color="#fff"/><stop offset="0.7" stop-color="#fff" stop-opacity="0.35"/><stop offset="1" stop-color="#000"/></radialGradient>
+    <mask id="gm"><rect width="1500" height="500" fill="url(#gridmask)"/></mask>
+    <linearGradient id="cf" x1="0" y1="140" x2="0" y2="430" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.20"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></linearGradient>
+    <linearGradient id="cs" x1="640" y1="358" x2="1410" y2="140" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#11bf86"/><stop offset="1" stop-color="#7dffce"/></linearGradient>
+    <filter id="cg" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1500" height="500" fill="#000000"/>
+  <ellipse cx="1230" cy="120" rx="430" ry="360" fill="url(#g1)"/>
+  <ellipse cx="250" cy="250" rx="380" ry="320" fill="url(#g2)"/>
+  <g stroke="#ffffff" stroke-opacity="0.05" stroke-width="1" mask="url(#gm)"><line x1="100" y1="0" x2="100" y2="500"/><line x1="200" y1="0" x2="200" y2="500"/><line x1="300" y1="0" x2="300" y2="500"/><line x1="400" y1="0" x2="400" y2="500"/><line x1="500" y1="0" x2="500" y2="500"/><line x1="600" y1="0" x2="600" y2="500"/><line x1="700" y1="0" x2="700" y2="500"/><line x1="800" y1="0" x2="800" y2="500"/><line x1="900" y1="0" x2="900" y2="500"/><line x1="1000" y1="0" x2="1000" y2="500"/><line x1="1100" y1="0" x2="1100" y2="500"/><line x1="1200" y1="0" x2="1200" y2="500"/><line x1="1300" y1="0" x2="1300" y2="500"/><line x1="1400" y1="0" x2="1400" y2="500"/><line x1="0" y1="100" x2="1500" y2="100"/><line x1="0" y1="200" x2="1500" y2="200"/><line x1="0" y1="300" x2="1500" y2="300"/><line x1="0" y1="400" x2="1500" y2="400"/></g>
+  <path d="M640 358 L726 320 L802 344 L898 276 L986 300 L1082 228 L1178 252 L1276 176 L1410 140 L1410 430 L640 430 Z" fill="url(#cf)"/>
+  <g filter="url(#cg)"><path d="M640 358 L726 320 L802 344 L898 276 L986 300 L1082 228 L1178 252 L1276 176 L1410 140" fill="none" stroke="url(#cs)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="1410" cy="140" r="8.5" fill="#9affd9"/></g>
+  <circle cx="1410" cy="140" r="17" fill="none" stroke="#2fe9a8" stroke-opacity="0.45" stroke-width="2"/>
+  <text x="98" y="124" font-family="Inter" font-weight="500" font-size="21" letter-spacing="6" fill="#8a8a90">SMART-MONEY TRACKER · SOLANA</text>
+  <g transform="translate(96 150) scale(3.25)"><g filter="url(#gM)">
+    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="url(#brand)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9.4 13.8 13.4 13.8" stroke="url(#brand)" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="26" cy="8" r="2.6" fill="url(#brand)"/></g></g>
+  <text x="232" y="234" font-family="Space Grotesk" font-weight="700" font-size="90" letter-spacing="-2" fill="#f4f4f6">ApeWise</text>
+  <text x="100" y="300" font-family="Space Grotesk" font-weight="500" font-size="33" letter-spacing="-0.3" fill="#cfd0d4">Follow the smartest money on <tspan fill="#2fe9a8">Solana.</tspan></text>
+  <text x="1404" y="462" text-anchor="end" font-family="Inter" font-weight="500" font-size="21" fill="#6b7178">apewise.ai · powered by Fourtis</text>
+</svg>

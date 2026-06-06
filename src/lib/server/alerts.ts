@@ -84,29 +84,23 @@ function riskLine(ev: SmartEvent): string | null {
   return `⛔ High risk · ${reasons}`;
 }
 
-function buyLink(mint: string): string {
-  const tmpl = process.env.BUY_LINK_TEMPLATE;
-  return tmpl
-    ? tmpl.replace("{mint}", mint)
-    : `https://dexscreener.com/solana/${mint}`;
-}
-
-export function chartKeyboard(mint?: string, socials?: SmartEvent["socials"]) {
-  if (!mint) return undefined;
-  const rows: { text: string; url: string }[][] = [
-    [
-      { text: "⚡ Buy", url: buyLink(mint) },
-      { text: "📊 Chart", url: `https://dexscreener.com/solana/${mint}` },
-    ],
-  ];
-  // The signaled token's own community links, when DexScreener has them.
-  const social: { text: string; url: string }[] = [];
-  if (socials?.website) social.push({ text: "🌐 Website", url: socials.website });
-  if (socials?.twitter) social.push({ text: "🐦 X", url: socials.twitter });
+/**
+ * Inline text links for the message body (no buttons): Chart + the token's own
+ * website / X / Telegram, shown only when known. Rendered as HTML <a> links;
+ * web previews are disabled in tgSend so they stay compact.
+ */
+export function socialLinks(
+  mint?: string,
+  socials?: SmartEvent["socials"],
+): string | null {
+  const parts: string[] = [];
+  if (mint)
+    parts.push(`📊 <a href="https://dexscreener.com/solana/${mint}">Chart</a>`);
+  if (socials?.website) parts.push(`🌐 <a href="${socials.website}">Website</a>`);
+  if (socials?.twitter) parts.push(`🐦 <a href="${socials.twitter}">X</a>`);
   if (socials?.telegram)
-    social.push({ text: "💬 Telegram", url: socials.telegram });
-  if (social.length) rows.push(social);
-  return { inline_keyboard: rows };
+    parts.push(`💬 <a href="${socials.telegram}">Telegram</a>`);
+  return parts.length ? parts.join("  ·  ") : null;
 }
 
 // Per wallet+token cooldown (anti-spam).
@@ -154,7 +148,8 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     metrics.length ? metrics.join("  ·  ") : null,
     riskLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
+    socialLinks(ev.tokenMint, ev.socials),
   ].filter(Boolean) as string[];
 
-  await postToChannel(lines.join("\n"), chartKeyboard(ev.tokenMint, ev.socials));
+  await postToChannel(lines.join("\n"));
 }

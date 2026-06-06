@@ -195,7 +195,7 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   } catch {
     wallets = [];
   }
-  const maxWallets = Number(process.env.RPC_MAX_WALLETS) || 60;
+  const maxWallets = Number(process.env.RPC_MAX_WALLETS) || 100;
   wallets = wallets.slice(0, maxWallets);
   if (!wallets.length) return [];
 

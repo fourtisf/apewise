@@ -1,6 +1,6 @@
 import { getMarketSnapshot } from "./marketLive";
 import { getTokenSocials } from "./socials";
-import { postToChannel, fmtUsd, chartKeyboard } from "./alerts";
+import { postToChannel, fmtUsd, socialLinks } from "./alerts";
 
 /**
  * Broadcast notable on-chain activity to the signals channel. Until Helius
@@ -33,8 +33,9 @@ export async function dispatchAlerts(): Promise<number> {
       `<code>${e.walletShort}</code> bought <b>${fmtUsd(e.amountUsd)}</b>`,
       e.marketCapUsd != null ? `💰 MC ${fmtUsd(e.marketCapUsd)}` : null,
       e.tokenMint ? `<code>${e.tokenMint}</code>` : null,
+      socialLinks(e.tokenMint, socials),
     ].filter(Boolean) as string[];
-    if (await postToChannel(lines.join("\n"), chartKeyboard(e.tokenMint, socials))) {
+    if (await postToChannel(lines.join("\n"))) {
       alerted.add(e.id);
       posted++;
     }

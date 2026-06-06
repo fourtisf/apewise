@@ -79,7 +79,13 @@ function derive(events: SmartEvent[]) {
  */
 export async function GET() {
   const tracked = await allEvents();
-  if (tracked.length > 0) {
+  // Only treat tracked smart-money data as "live" while it's fresh. If the
+  // ingest poller stalls (no new swaps for a while), fall through to the
+  // real-time market snapshot so the terminal never shows hours-old rows.
+  const freshMin = Number(process.env.FEED_FRESH_MIN) || 30;
+  const isFresh =
+    tracked.length > 0 && Date.now() - tracked[0].ts < freshMin * 60_000;
+  if (isFresh) {
     const { feed, kpis, inflows } = derive(tracked);
     const topWallets = scoreWallets(tracked, 6).map((w) => ({
       wallet: w.walletShort,

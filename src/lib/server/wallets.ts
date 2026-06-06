@@ -40,7 +40,7 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
   if (process.env.USE_GMGN_WALLETS !== "false") {
     try {
       const { getGmgnSmartWallets } = await import("./gmgn");
-      gmgn = await getGmgnSmartWallets(50);
+      gmgn = await getGmgnSmartWallets(100);
     } catch {
       gmgn = [];
     }
@@ -50,7 +50,7 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
   if (process.env.BIRDEYE_API_KEY) {
     try {
       const { getBirdeyeSmartWallets } = await import("./birdeye");
-      birdeye = await getBirdeyeSmartWallets(50);
+      birdeye = await getBirdeyeSmartWallets(100);
     } catch {
       birdeye = [];
     }

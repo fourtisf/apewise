@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { walletMap } from "@/lib/server/wallets";
-import { parseHeliusTx, type HeliusTx } from "@/lib/server/helius";
+import {
+  parseHeliusTx,
+  involvedAccounts,
+  type HeliusTx,
+} from "@/lib/server/helius";
 import { addEvents, type SmartEvent } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
@@ -41,20 +45,14 @@ export async function POST(req: Request) {
   const parsed: SmartEvent[] = [];
 
   for (const tx of txs) {
-    const involved = new Set<string>();
-    const sw = tx.events?.swap;
-    for (const leg of [...(sw?.tokenInputs || []), ...(sw?.tokenOutputs || [])]) {
-      if (leg.userAccount) involved.add(leg.userAccount);
-    }
-    if (sw?.nativeInput?.account) involved.add(sw.nativeInput.account);
-    if (sw?.nativeOutput?.account) involved.add(sw.nativeOutput.account);
-
-    for (const addr of involved) {
+    for (const addr of involvedAccounts(tx)) {
       const wallet = wallets.get(addr);
       if (!wallet) continue;
       const ev = await parseHeliusTx(tx, wallet);
-      if (ev) parsed.push(ev);
-      break; // one event per tx
+      if (ev) {
+        parsed.push(ev);
+        break; // one event per tx
+      }
     }
   }
 
@@ -63,11 +61,18 @@ export async function POST(req: Request) {
   const fresh = await addEvents(parsed);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
 
-  // Observability: shows whether Helius is delivering, and whether the swaps
-  // match tracked wallets (rx>0 but parsed=0 ⇒ wallets not recognized).
+  // Observability: shows whether Helius is delivering + whether swaps parse.
   console.log(
     `[helius] rx=${txs.length} parsed=${parsed.length} ingested=${fresh.length}`,
   );
+  if (parsed.length === 0 && txs.length > 0) {
+    const accts = involvedAccounts(txs[0]);
+    const matched = [...accts].filter((a) => wallets.has(a)).length;
+    console.log(
+      `[helius] no-parse sample: type=${txs[0].type} accts=${accts.size}` +
+        ` matched=${matched} tokenTransfers=${(txs[0].tokenTransfers || []).length}`,
+    );
+  }
   return NextResponse.json({
     ok: true,
     parsed: parsed.length,

@@ -4,8 +4,9 @@ import { cn } from "@/lib/cn";
  * ApeWise monogram — an "AW" ligature drawn as a rising smart-money chart:
  * the **A** (peak + crossbar) flows straight into a **W** zig-zag and resolves
  * on the signal dot. Premium emerald (a `--brand-hi → --brand-lo` gradient, lit
- * from the top) on the dark brand tile. Tokens keep it themeable; the gradient
- * is defined in the mark's own 0–32 space so every instance renders correctly.
+ * from the top) on a pure-black, borderless tile with a soft emerald glow.
+ * Tokens keep it themeable; the gradient is defined in the mark's own 0–32 space
+ * so every instance renders correctly.
  */
 export function ApeWiseMonogram({ className }: { className?: string }) {
   return (
@@ -28,34 +29,43 @@ export function ApeWiseMonogram({ className }: { className?: string }) {
           <stop offset="0" stopColor="var(--brand-hi)" />
           <stop offset="1" stopColor="var(--brand-lo)" />
         </linearGradient>
+        <filter
+          id="apewise-glow"
+          x="-50%"
+          y="-50%"
+          width="200%"
+          height="200%"
+          colorInterpolationFilters="sRGB"
+        >
+          <feGaussianBlur in="SourceGraphic" stdDeviation="0.85" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
-      <rect
-        x="1.25"
-        y="1.25"
-        width="29.5"
-        height="29.5"
-        rx="9"
-        fill="#14161B"
-        stroke="var(--border-strong)"
-        strokeWidth="1.5"
-      />
-      {/* A → W rising ligature */}
-      <path
-        d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
-        stroke="url(#apewise-brand)"
-        strokeWidth="2.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* crossbar of the A */}
-      <path
-        d="M9.4 13.8 L13.4 13.8"
-        stroke="url(#apewise-brand)"
-        strokeWidth="2.3"
-        strokeLinecap="round"
-      />
-      {/* smart-money signal dot */}
-      <circle cx="26" cy="8" r="2.5" fill="url(#apewise-brand)" />
+      {/* pure-black, borderless tile */}
+      <rect x="0" y="0" width="32" height="32" rx="9" fill="#000000" />
+      <g filter="url(#apewise-glow)">
+        {/* A → W rising ligature */}
+        <path
+          d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
+          stroke="url(#apewise-brand)"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* crossbar of the A */}
+        <path
+          d="M9.4 13.8 L13.4 13.8"
+          stroke="url(#apewise-brand)"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        />
+        {/* smart-money signal dot */}
+        <circle cx="26" cy="8" r="2.6" fill="url(#apewise-brand)" />
+      </g>
     </svg>
   );
 }

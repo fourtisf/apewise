@@ -28,8 +28,8 @@ export default function OpengraphImage() {
               width: 60,
               height: 60,
               borderRadius: 16,
-              background: "#101013",
-              border: "1px solid #26262c",
+              background: "#000000",
+              boxShadow: "0 0 22px rgba(47,233,168,0.5)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -38,18 +38,18 @@ export default function OpengraphImage() {
             <svg width="36" height="36" viewBox="0 0 32 32" fill="none">
               <path
                 d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
-                stroke="#22e5a4"
+                stroke="#2fe9a8"
                 strokeWidth="2.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               <path
                 d="M9.4 13.8 L13.4 13.8"
-                stroke="#22e5a4"
+                stroke="#2fe9a8"
                 strokeWidth="2.6"
                 strokeLinecap="round"
               />
-              <circle cx="26" cy="8" r="2.5" fill="#22e5a4" />
+              <circle cx="26" cy="8" r="2.5" fill="#2fe9a8" />
             </svg>
           </div>
           <div style={{ fontSize: 36, fontWeight: 700 }}>ApeWise</div>

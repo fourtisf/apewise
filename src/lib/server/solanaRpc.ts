@@ -195,7 +195,11 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   } catch {
     wallets = [];
   }
-  const maxWallets = Number(process.env.RPC_MAX_WALLETS) || 100;
+  // Keep this modest: polling is O(wallets × 1/interval) RPC calls EVERY cycle
+  // whether or not anyone trades, so a paid RPC (Helius) burns credits fast on
+  // this path. To track many wallets cheaply, use the push webhook
+  // (/api/ingest/helius) instead — it only costs you on real swaps.
+  const maxWallets = Number(process.env.RPC_MAX_WALLETS) || 60;
   wallets = wallets.slice(0, maxWallets);
   if (!wallets.length) return [];
 

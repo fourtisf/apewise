@@ -6,6 +6,12 @@
  * endpoint on an interval, so smart-money trades flow into the terminal +
  * Telegram alerts WITHOUT a Helius webhook (and without its monthly credit cap).
  *
+ * ⚠️  Pick ONE ingest mode. If you run the Helius webhook
+ *     (scripts/setup-helius-webhook.mjs), STOP this worker —
+ *     `pm2 stop apewise-rpc` — because polling pulls every wallet every cycle
+ *     regardless of activity, so a paid RPC (Helius) burns credits here. This
+ *     worker is meant for the FREE public RPC, when you have no Helius webhook.
+ *
  * Run under PM2 (alongside `apewise` + `apewise-alerts`):
  *   pm2 start scripts/rpc-poll-worker.mjs --name apewise-rpc && pm2 save
  *

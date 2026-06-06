@@ -68,7 +68,7 @@ if (process.env.USE_GMGN_WALLETS !== "false") {
 // 400/401 is diagnosable (bad key, unsubscribed package, wrong param, …).
 let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
-  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 50));
+  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 100));
   const PAGE = 10;
   const pages = Math.min(Math.ceil(want / PAGE), 10); // hard cap ~100
   const seen = new Set();

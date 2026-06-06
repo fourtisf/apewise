@@ -1,5 +1,5 @@
 import { getMarketSnapshot } from "./marketLive";
-import { getTokenMarket } from "./market";
+import { getTokenSocials } from "./socials";
 import { postToChannel, fmtUsd, chartKeyboard } from "./alerts";
 
 /**
@@ -24,9 +24,9 @@ export async function dispatchAlerts(): Promise<number> {
 
   let posted = 0;
   for (const e of candidates) {
-    // Token's own community links (DexScreener, cached) → social buttons.
+    // Token's own community links (DexScreener → pump.fun → Birdeye, cached).
     const socials = e.tokenMint
-      ? (await getTokenMarket(e.tokenMint).catch(() => null))?.socials
+      ? await getTokenSocials(e.tokenMint).catch(() => undefined)
       : undefined;
     const lines = [
       `🐋 <b>WHALE BUY</b> · <b>$${e.token}</b>`,

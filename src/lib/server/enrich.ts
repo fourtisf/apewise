@@ -1,17 +1,19 @@
 import type { SmartEvent } from "./store";
 import { getTokenMarket } from "./market";
+import { getTokenSocials } from "./socials";
 import { checkToken } from "./antirug";
 
 /**
- * Fill an event with token symbol, market data (price/mcap/liquidity/age) and an
- * anti-rug verdict. Fail-soft — if a source is down the event still flows, just
- * with less context. Mutates and returns the event.
+ * Fill an event with token symbol, market data (price/mcap/liquidity/age), an
+ * anti-rug verdict and the token's community links. Fail-soft — if a source is
+ * down the event still flows, just with less context. Mutates and returns it.
  */
 export async function enrichEvent(ev: SmartEvent): Promise<SmartEvent> {
-  if (!ev.tokenMint) return ev;
+  const mint = ev.tokenMint;
+  if (!mint) return ev;
   const [market, risk] = await Promise.all([
-    getTokenMarket(ev.tokenMint).catch(() => null),
-    checkToken(ev.tokenMint).catch(
+    getTokenMarket(mint).catch(() => null),
+    checkToken(mint).catch(
       () => ({ verdict: "unknown" as const, reasons: [] as string[] }),
     ),
   ]);
@@ -27,8 +29,9 @@ export async function enrichEvent(ev: SmartEvent): Promise<SmartEvent> {
         Math.round((Date.now() - market.pairCreatedAt) / 60_000),
       );
     }
-    if (market.socials) ev.socials = market.socials;
   }
   ev.risk = risk;
+  // DexScreener socials (from the market call) → pump.fun → Birdeye.
+  ev.socials = await getTokenSocials(mint, market?.socials);
   return ev;
 }

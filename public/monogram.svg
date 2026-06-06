@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" role="img" aria-label="ApeWise">
+  <rect x="1.25" y="1.25" width="29.5" height="29.5" rx="9" fill="#14161B" stroke="#ffffff24" stroke-width="1.5"/>
+  <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="#ededf0" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M9.4 13.8 13.4 13.8" stroke="#ededf0" stroke-width="2.3" stroke-linecap="round"/>
+  <circle cx="26" cy="8" r="2.5" fill="#ededf0"/>
+</svg>

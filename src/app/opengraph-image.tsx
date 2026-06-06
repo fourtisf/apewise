@@ -35,15 +35,21 @@ export default function OpengraphImage() {
               justifyContent: "center",
             }}
           >
-            <svg width="34" height="34" viewBox="0 0 32 32" fill="none">
+            <svg width="36" height="36" viewBox="0 0 32 32" fill="none">
               <path
-                d="M6 22 L13 15 L17 18 L25 9"
+                d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
                 stroke="#ededf0"
-                strokeWidth="3"
+                strokeWidth="2.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              <circle cx="25" cy="9" r="2.6" fill="#ededf0" />
+              <path
+                d="M9.4 13.8 L13.4 13.8"
+                stroke="#ededf0"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+              />
+              <circle cx="26" cy="8" r="2.5" fill="#ededf0" />
             </svg>
           </div>
           <div style={{ fontSize: 36, fontWeight: 700 }}>ApeWise</div>

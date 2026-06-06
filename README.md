@@ -82,6 +82,18 @@ All tokens live as CSS variables in `src/app/globals.css` (`--bg`, `--surface`,
 `--accent`, `--accent-2`, `--radius`, fonts, …) and are surfaced to Tailwind via
 `tailwind.config.ts` (`bg-bg`, `text-accent`, `rounded-2xl`, `font-display`, …).
 
+### Brand assets
+
+The logo is an **"AW" monogram** — the `A` (peak + crossbar) flows into a `W`
+zig-zag and resolves on the smart-money signal dot, monochrome platinum on the
+rounded brand tile. Single source of truth: `<ApeWiseMonogram />` /
+`<BrandLockup />` in `src/components/Brand.tsx` (token-driven, re-themes with the
+design system). Standalone files for press / external use:
+
+- `public/monogram.svg` — the mark on its own.
+- `public/logo.svg` — horizontal lockup (monogram + wordmark).
+- `src/app/icon.svg` — favicon: a simplified `A↗` variant that stays legible at 16 px.
+
 ### Copy & i18n
 
 All user-facing copy lives in `src/locales/en.ts` — no hardcoded strings in

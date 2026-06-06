@@ -1,7 +1,13 @@
 import { cn } from "@/lib/cn";
 
-/** ApeWise mark — a smart-money uptrend inside a rounded tile. */
-export function ApeWiseMark({ className }: { className?: string }) {
+/**
+ * ApeWise monogram — an "AW" ligature drawn as a rising smart-money chart:
+ * the **A** (peak + crossbar) flows straight into a **W** zig-zag and resolves
+ * on the signal dot. Monochrome platinum on the rounded brand tile. Strokes
+ * inherit the `--accent` / `--border-strong` tokens, so the mark re-themes
+ * automatically with the rest of the design system.
+ */
+export function ApeWiseMonogram({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 32 32"
@@ -20,19 +26,34 @@ export function ApeWiseMark({ className }: { className?: string }) {
         stroke="var(--border-strong)"
         strokeWidth="1.5"
       />
+      {/* A → W rising ligature */}
       <path
-        d="M7.5 21.5 L13.5 15 L17.5 18.5 L24.5 9.5"
+        d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
         stroke="var(--accent)"
-        strokeWidth="2.4"
+        strokeWidth="2.3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="24.5" cy="9.5" r="2.6" fill="var(--accent)" />
+      {/* crossbar of the A */}
+      <path
+        d="M9.4 13.8 L13.4 13.8"
+        stroke="var(--accent)"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+      />
+      {/* smart-money signal dot */}
+      <circle cx="26" cy="8" r="2.5" fill="var(--accent)" />
     </svg>
   );
 }
 
-/** Wordmark lockup: mark + "ApeWise" + optional "powered by Fourtis". */
+/**
+ * @deprecated Use {@link ApeWiseMonogram}. Kept as a stable alias so existing
+ * imports keep resolving to the canonical mark.
+ */
+export const ApeWiseMark = ApeWiseMonogram;
+
+/** Wordmark lockup: monogram + "ApeWise" + optional "powered by Fourtis". */
 export function BrandLockup({
   poweredBy,
   className,
@@ -42,7 +63,7 @@ export function BrandLockup({
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <ApeWiseMark className="h-8 w-8 shrink-0" />
+      <ApeWiseMonogram className="h-8 w-8 shrink-0" />
       <span className="flex flex-col leading-none">
         <span className="font-display text-lg font-semibold tracking-tight text-text">
           ApeWise

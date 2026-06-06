@@ -2,11 +2,17 @@
      Wordmark uses a geometric system-font stack so the file is self-contained;
      the in-app lockup renders the real Clash Display via <BrandLockup />. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="232" height="60" viewBox="0 0 232 60" fill="none" role="img" aria-label="ApeWise">
+  <defs>
+    <linearGradient id="b" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3df2b2"/>
+      <stop offset="1" stop-color="#12c58d"/>
+    </linearGradient>
+  </defs>
   <g transform="translate(8 8) scale(1.375)">
     <rect x="1.25" y="1.25" width="29.5" height="29.5" rx="9" fill="#14161B" stroke="#ffffff24" stroke-width="1.5"/>
-    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="#ededf0" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M9.4 13.8 13.4 13.8" stroke="#ededf0" stroke-width="2.3" stroke-linecap="round"/>
-    <circle cx="26" cy="8" r="2.5" fill="#ededf0"/>
+    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="url(#b)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9.4 13.8 13.4 13.8" stroke="url(#b)" stroke-width="2.3" stroke-linecap="round"/>
+    <circle cx="26" cy="8" r="2.5" fill="url(#b)"/>
   </g>
   <text x="68" y="38" font-family="Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="27" font-weight="600" letter-spacing="-0.5" fill="#f2f2f4">ApeWise</text>
 </svg>

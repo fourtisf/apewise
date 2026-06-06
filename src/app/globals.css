@@ -18,6 +18,12 @@
   --text-muted: #8a8a90;
   --accent: #ededf0; /* platinum — monochrome accent (no blue) */
   --accent-2: #70707a; /* neutral grey */
+  /* Brand mark — premium emerald. Logo only; the UI accent stays monochrome.
+     Drives <ApeWiseMonogram /> (a --brand-hi → --brand-lo gradient) and the
+     standalone logo assets; --brand is the solid fallback. */
+  --brand: #22e5a4;
+  --brand-hi: #3df2b2;
+  --brand-lo: #12c58d;
   --red: #ff7a7a;
   --amber: #ffce54;
   --radius: 20px;

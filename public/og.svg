@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
   <rect width="1200" height="630" fill="#08090A"/>
-  <!-- neutral glows (monochrome brand) -->
-  <circle cx="140" cy="60" r="340" fill="#ffffff" opacity="0.05"/>
+  <!-- glows -->
+  <circle cx="140" cy="60" r="340" fill="#22e5a4" opacity="0.10"/>
   <circle cx="1140" cy="120" r="360" fill="#ffffff" opacity="0.04"/>
   <!-- subtle grid -->
   <g stroke="#ffffff" stroke-opacity="0.05">
@@ -9,17 +9,23 @@
     <path d="M300 0 V630 M600 0 V630 M900 0 V630"/>
   </g>
   <!-- mark + kicker -->
+  <defs>
+    <linearGradient id="b" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3df2b2"/>
+      <stop offset="1" stop-color="#12c58d"/>
+    </linearGradient>
+  </defs>
   <g transform="translate(96,128) scale(2.75)">
     <rect x="1.25" y="1.25" width="29.5" height="29.5" rx="9" fill="#14161B" stroke="#ffffff24" stroke-width="1.1"/>
-    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="#ededf0" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M9.4 13.8 13.4 13.8" stroke="#ededf0" stroke-width="2.3" stroke-linecap="round"/>
-    <circle cx="26" cy="8" r="2.5" fill="#ededf0"/>
+    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="url(#b)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9.4 13.8 13.4 13.8" stroke="url(#b)" stroke-width="2.3" stroke-linecap="round"/>
+    <circle cx="26" cy="8" r="2.5" fill="url(#b)"/>
   </g>
   <text x="208" y="166" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="26" letter-spacing="7" fill="#9AA0A8">SMART-MONEY TRACKER · SOLANA</text>
   <text x="200" y="200" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="22" letter-spacing="2" fill="#ECEDEF" font-weight="600">ApeWise</text>
   <!-- headline -->
   <text x="96" y="360" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="82" font-weight="700" fill="#ECEDEF">Follow the smartest</text>
-  <text x="96" y="452" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="82" font-weight="700" fill="#ECEDEF">money on <tspan fill="#ededf0">Solana.</tspan></text>
+  <text x="96" y="452" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="82" font-weight="700" fill="#ECEDEF">money on <tspan fill="#22e5a4">Solana.</tspan></text>
   <!-- sub -->
   <text x="96" y="520" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="28" fill="#9AA0A8">Segmented wallets · anti-rug fused · real-time Telegram alerts</text>
   <!-- footer -->

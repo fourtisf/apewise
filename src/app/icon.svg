@@ -1,7 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="b" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3df2b2"/>
+      <stop offset="1" stop-color="#12c58d"/>
+    </linearGradient>
+  </defs>
   <rect x="1.25" y="1.25" width="29.5" height="29.5" rx="9" fill="#14161B" stroke="#ffffff24" stroke-width="1.5"/>
-  <path d="M7 23 13 8.6 19 23" fill="none" stroke="#ededf0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M10.1 16 15.9 16" stroke="#ededf0" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M18.7 14.6 24.8 8.6" fill="none" stroke="#ededf0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="24.8" cy="8.6" r="2.6" fill="#ededf0"/>
+  <path d="M7 23 13 8.6 19 23" fill="none" stroke="url(#b)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10.1 16 15.9 16" stroke="url(#b)" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M18.7 14.6 24.8 8.6" fill="none" stroke="url(#b)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24.8" cy="8.6" r="2.6" fill="url(#b)"/>
 </svg>

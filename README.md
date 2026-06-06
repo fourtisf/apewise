@@ -85,10 +85,11 @@ All tokens live as CSS variables in `src/app/globals.css` (`--bg`, `--surface`,
 ### Brand assets
 
 The logo is an **"AW" monogram** — the `A` (peak + crossbar) flows into a `W`
-zig-zag and resolves on the smart-money signal dot, monochrome platinum on the
-rounded brand tile. Single source of truth: `<ApeWiseMonogram />` /
-`<BrandLockup />` in `src/components/Brand.tsx` (token-driven, re-themes with the
-design system). Standalone files for press / external use:
+zig-zag and resolves on the smart-money signal dot, in **premium emerald** (a
+`--brand-hi → --brand-lo` gradient) on the dark brand tile. The UI accent stays
+monochrome (`--accent`); the emerald is the logo's signature colour. Single
+source of truth: `<ApeWiseMonogram />` / `<BrandLockup />` in
+`src/components/Brand.tsx` (token-driven). Standalone files for press / external use:
 
 - `public/monogram.svg` — the mark on its own.
 - `public/logo.svg` — horizontal lockup (monogram + wordmark).

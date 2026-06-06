@@ -3,9 +3,9 @@ import { cn } from "@/lib/cn";
 /**
  * ApeWise monogram — an "AW" ligature drawn as a rising smart-money chart:
  * the **A** (peak + crossbar) flows straight into a **W** zig-zag and resolves
- * on the signal dot. Monochrome platinum on the rounded brand tile. Strokes
- * inherit the `--accent` / `--border-strong` tokens, so the mark re-themes
- * automatically with the rest of the design system.
+ * on the signal dot. Premium emerald (a `--brand-hi → --brand-lo` gradient, lit
+ * from the top) on the dark brand tile. Tokens keep it themeable; the gradient
+ * is defined in the mark's own 0–32 space so every instance renders correctly.
  */
 export function ApeWiseMonogram({ className }: { className?: string }) {
   return (
@@ -16,6 +16,19 @@ export function ApeWiseMonogram({ className }: { className?: string }) {
       role="img"
       aria-label="ApeWise"
     >
+      <defs>
+        <linearGradient
+          id="apewise-brand"
+          x1="0"
+          y1="7"
+          x2="0"
+          y2="24"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="var(--brand-hi)" />
+          <stop offset="1" stopColor="var(--brand-lo)" />
+        </linearGradient>
+      </defs>
       <rect
         x="1.25"
         y="1.25"
@@ -29,7 +42,7 @@ export function ApeWiseMonogram({ className }: { className?: string }) {
       {/* A → W rising ligature */}
       <path
         d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
-        stroke="var(--accent)"
+        stroke="url(#apewise-brand)"
         strokeWidth="2.3"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -37,12 +50,12 @@ export function ApeWiseMonogram({ className }: { className?: string }) {
       {/* crossbar of the A */}
       <path
         d="M9.4 13.8 L13.4 13.8"
-        stroke="var(--accent)"
+        stroke="url(#apewise-brand)"
         strokeWidth="2.3"
         strokeLinecap="round"
       />
       {/* smart-money signal dot */}
-      <circle cx="26" cy="8" r="2.5" fill="var(--accent)" />
+      <circle cx="26" cy="8" r="2.5" fill="url(#apewise-brand)" />
     </svg>
   );
 }

@@ -4,6 +4,7 @@ import { scoreWallets } from "@/lib/server/score";
 import { getMarketSnapshot } from "@/lib/server/marketLive";
 import { getGmgnTopWallets } from "@/lib/server/gmgn";
 import { getTopTraders } from "@/lib/server/birdeye";
+import { getSmartWallets } from "@/lib/server/wallets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ function derive(events: SmartEvent[]) {
   const feed = events.slice(0, 30).map((e) => ({
     id: e.id,
     wallet: e.walletShort,
+    walletAddress: e.wallet,
     segment: e.segment,
     action: e.action,
     token: e.token,
@@ -94,6 +96,7 @@ export async function GET() {
       pnlUsd: w.pnlUsd,
       trades: w.trades,
     }));
+    const trackedWallets = (await getSmartWallets()).length;
     return NextResponse.json({
       live: true,
       source: "smart",
@@ -101,6 +104,7 @@ export async function GET() {
       kpis,
       inflows,
       topWallets,
+      trackedWallets,
     });
   }
 

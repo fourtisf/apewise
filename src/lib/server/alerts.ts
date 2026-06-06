@@ -150,7 +150,7 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
 
   const lines = [
     `${SEG_EMOJI[ev.segment]} <b>${verb}</b> · <b>$${ev.token}</b>`,
-    `${tag}${name} · <code>${ev.walletShort}</code> · <b>${fmtUsd(ev.amountUsd)}</b>`,
+    `${tag}${name} · <a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a> · <b>${fmtUsd(ev.amountUsd)}</b>`,
     metrics.length ? metrics.join("  ·  ") : null,
     riskLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,

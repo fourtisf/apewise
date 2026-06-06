@@ -30,7 +30,7 @@ export async function dispatchAlerts(): Promise<number> {
       : undefined;
     const lines = [
       `🐋 <b>WHALE BUY</b> · <b>$${e.token}</b>`,
-      `<code>${e.walletShort}</code> bought <b>${fmtUsd(e.amountUsd)}</b>`,
+      `<a href="https://solscan.io/account/${e.wallet}">${e.walletShort}</a> bought <b>${fmtUsd(e.amountUsd)}</b>`,
       e.marketCapUsd != null ? `💰 MC ${fmtUsd(e.marketCapUsd)}` : null,
       e.tokenMint ? `<code>${e.tokenMint}</code>` : null,
       socialLinks(e.tokenMint, socials),

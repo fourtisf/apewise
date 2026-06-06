@@ -42,6 +42,7 @@ const FILTERS: { key: SegmentKey | "all"; label: string }[] = [
 
 /** Feed row = mock FeedEvent, plus the live-only enrichment fields. */
 type Row = FeedEvent & {
+  walletAddress?: string;
   chain?: string;
   tokenMint?: string;
   marketCapUsd?: number;
@@ -78,6 +79,7 @@ export function TerminalView() {
   const [live, setLive] = useState(false);
   const [source, setSource] = useState<"smart" | "market" | "demo">("demo");
   const [walletsLive, setWalletsLive] = useState(false);
+  const [tracked, setTracked] = useState(0);
   const liveRef = useRef(false);
 
   // Populate on mount (client-only) to avoid a hydration mismatch from Math.random.
@@ -117,6 +119,8 @@ export function TerminalView() {
           setSource(data.source === "market" ? "market" : "smart");
           setFeed(data.events as Row[]);
           if (data.kpis) setKpis(data.kpis as TerminalKpis);
+          if (typeof data.trackedWallets === "number")
+            setTracked(data.trackedWallets);
           if (Array.isArray(data.inflows) && data.inflows.length)
             setInflows(data.inflows as TokenInflow[]);
           if (Array.isArray(data.topWallets) && data.topWallets.length) {
@@ -162,18 +166,30 @@ export function TerminalView() {
           icon: Activity,
           label: mkt ? "Market volume · 24h" : "Smart-money volume · 24h",
           value: formatUsd(kpis.volumeUsd),
+          sub: undefined as string | undefined,
         },
         {
           icon: Wallet,
           label: mkt ? "Active traders" : "Active smart wallets",
           value: kpis.activeWallets.toLocaleString("en-US"),
+          // Active = wallets that actually traded in 24h; we watch many more.
+          sub:
+            !mkt && tracked
+              ? `of ${tracked.toLocaleString("en-US")} tracked`
+              : undefined,
         },
         {
           icon: Zap,
           label: mkt ? "Trades · 24h" : "Signals fired · 24h",
           value: kpis.signals24h.toLocaleString("en-US"),
+          sub: undefined as string | undefined,
         },
-        { icon: Flame, label: "Top token · 1h", value: `$${kpis.topToken}` },
+        {
+          icon: Flame,
+          label: "Top token · 1h",
+          value: `$${kpis.topToken}`,
+          sub: undefined as string | undefined,
+        },
       ]
     : [];
 
@@ -249,6 +265,11 @@ export function TerminalView() {
                   <div className="mt-2 font-display text-2xl font-semibold tabular-nums text-text">
                     {k.value}
                   </div>
+                  {k.sub && (
+                    <div className="mt-0.5 font-mono text-[0.58rem] text-text-muted">
+                      {k.sub}
+                    </div>
+                  )}
                 </div>
               ))}
         </div>
@@ -345,9 +366,21 @@ export function TerminalView() {
                           {source === "market" ? "•" : seg.emoji}
                         </span>
                         <div className="min-w-0">
-                          <div className="font-mono text-sm text-text">
-                            {ev.wallet}
-                          </div>
+                          {ev.walletAddress ? (
+                            <a
+                              href={`https://solscan.io/account/${ev.walletAddress}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono text-sm text-text transition-colors hover:text-accent"
+                              title="View wallet on Solscan"
+                            >
+                              {ev.wallet}
+                            </a>
+                          ) : (
+                            <div className="font-mono text-sm text-text">
+                              {ev.wallet}
+                            </div>
+                          )}
                           <div
                             className="text-[0.7rem]"
                             style={{

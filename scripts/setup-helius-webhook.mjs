@@ -229,8 +229,9 @@ const res = await fetch(
 );
 console.log(keep ? `Updated existing webhook ${keep.webhookID}` : "Created new webhook");
 
+const respText = await res.text();
 console.log("HTTP", res.status);
-console.log(await res.text());
+if (!res.ok) console.log(respText.slice(0, 500)); // only dump the body on error
 console.log(
   `\nSources — birdeye ${birdeye.length}, active ${active.length}, gmgn ${gmgn.length}, manual ${manual.length}` +
     ` → ${accountAddresses.length} unique wallet(s).`,

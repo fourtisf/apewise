@@ -18,11 +18,18 @@ export function shortMint(mint: string): string {
   return mint.length > 9 ? `${mint.slice(0, 4)}…${mint.slice(-4)}` : mint;
 }
 
-async function fetchJson(url: string, ms = 2500): Promise<unknown | null> {
+async function fetchJson(
+  url: string,
+  ms = 2500,
+  headers?: Record<string, string>,
+): Promise<unknown | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      ...(headers ? { headers } : {}),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -30,6 +37,22 @@ async function fetchJson(url: string, ms = 2500): Promise<unknown | null> {
   } finally {
     clearTimeout(t);
   }
+}
+
+/** GeckoTerminal market cap — sanity source when DexScreener returns garbage. */
+async function gtMarketCap(mint: string): Promise<number | undefined> {
+  const json = (await fetchJson(
+    `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}`,
+    2500,
+    { accept: "application/json" },
+  )) as
+    | { data?: { attributes?: { market_cap_usd?: string | number; fdv_usd?: string | number } } }
+    | null;
+  const a = json?.data?.attributes;
+  if (!a) return undefined;
+  const raw = a.market_cap_usd ?? a.fdv_usd;
+  const mc = raw != null ? Number(raw) : NaN;
+  return Number.isFinite(mc) && mc > 0 ? mc : undefined;
 }
 
 import type { TokenSocials } from "./store";
@@ -102,6 +125,14 @@ export async function getTokenMarket(mint: string): Promise<TokenMarket> {
       pairCreatedAt: best.pairCreatedAt,
       socials: parseSocials(withInfo.info),
     };
+  }
+
+  // DexScreener occasionally returns an absurd market cap (e.g. BONK as ~$1.9T).
+  // Cross-check obviously-broken values (> $50B for a Solana memecoin) against
+  // GeckoTerminal; drop the field entirely if it's still nonsense.
+  if (data.marketCapUsd != null && data.marketCapUsd > 5e10) {
+    const gt = await gtMarketCap(mint).catch(() => undefined);
+    data.marketCapUsd = gt != null && gt < 5e10 ? gt : undefined;
   }
 
   marketCache.set(mint, { at: Date.now(), data });

@@ -75,7 +75,9 @@ function fmtAge(min?: number): string | null {
   if (min == null) return null;
   if (min < 60) return `${min}m`;
   if (min < 1440) return `${Math.round(min / 60)}h`;
-  return `${Math.round(min / 1440)}d`;
+  const days = min / 1440;
+  if (days < 365) return `${Math.round(days)}d`;
+  return `${(days / 365).toFixed(1)}y`;
 }
 
 function riskLine(ev: SmartEvent): string | null {

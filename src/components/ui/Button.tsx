@@ -29,7 +29,7 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-[var(--text)] text-[#0a0c12] shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_6px_20px_-8px_rgba(0,0,0,0.55)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_12px_36px_-10px_var(--accent)] active:scale-[0.98]",
+    "bg-[linear-gradient(180deg,var(--brand-hi),var(--brand-lo))] text-[#04140e] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_10px_30px_-10px_color-mix(in_srgb,var(--accent)_70%,transparent)] hover:brightness-[1.06] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_16px_46px_-12px_color-mix(in_srgb,var(--accent)_88%,transparent)] active:scale-[0.98]",
   secondary:
     "border border-[var(--border)] bg-[var(--surface)]/60 text-text backdrop-blur-md hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)] active:scale-[0.98]",
   ghost: "text-text-muted hover:text-text",

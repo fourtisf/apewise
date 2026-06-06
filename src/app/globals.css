@@ -16,12 +16,11 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #f2f2f4;
   --text-muted: #8a8a90;
-  --accent: #ededf0; /* platinum — monochrome accent (no blue) */
-  --accent-2: #70707a; /* neutral grey */
-  /* Brand mark — premium emerald. Logo only; the UI accent stays monochrome.
-     Drives <ApeWiseMonogram /> (a --brand-hi → --brand-lo gradient, lit from the
-     top, on a pure-black borderless tile with a soft emerald glow) and the
-     standalone logo assets; --brand is the solid fallback. */
+  --accent: #22e5a4; /* premium emerald — brand-led UI accent */
+  --accent-2: #0e9e72; /* deep emerald — secondary glows / depth */
+  /* Brand emerald. Drives the logo (<ApeWiseMonogram />: a --brand-hi → --brand-lo
+     gradient on a pure-black tile) AND the UI: --brand === --accent, while
+     --brand-hi/-lo are the gradient stops reused by the primary button. */
   --brand: #22e5a4;
   --brand-hi: #5cffc4;
   --brand-lo: #11bf86;
@@ -147,9 +146,9 @@
     color: transparent;
   }
 
-  /* Premium silver sheen for large display headings */
+  /* Premium emerald-tinted sheen for large display headings */
   .headline-sheen {
-    background: linear-gradient(180deg, #ffffff 16%, #aab2c0 100%);
+    background: linear-gradient(180deg, #ffffff 14%, #84ead0 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;

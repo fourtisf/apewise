@@ -12,7 +12,7 @@
  * Wallets are read from data/smart-wallets.json (or $SMART_WALLETS_FILE).
  * Manage/delete webhooks later in the Helius dashboard.
  */
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
 const apiKey = process.env.HELIUS_API_KEY;
 const webhookURL = process.env.WEBHOOK_URL;
@@ -70,7 +70,7 @@ let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
   const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 100));
   const PAGE = 10;
-  const pages = Math.min(Math.ceil(want / PAGE), 10); // hard cap ~100
+  const pages = Math.min(Math.ceil(want / PAGE), 30); // hard cap ~300
   const seen = new Set();
   for (let i = 0; i < pages && birdeye.length < want; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1300)); // free-tier rate limit
@@ -113,11 +113,24 @@ if (process.env.BIRDEYE_API_KEY) {
   console.log(`Birdeye: sourced ${birdeye.length} wallets`);
 }
 
-const accountAddresses = [
-  ...new Set(
-    [...birdeye, ...gmgn, ...manual.map((w) => w.address)].filter(Boolean),
-  ),
-];
+// Resolve the full tracked set WITH segments (manual wins on label/segment),
+// and persist it so the app's walletMap matches exactly what the webhook
+// tracks — otherwise live re-sourcing could recognize fewer wallets and drop
+// their swaps. The app reads this file (see lib/server/wallets.ts).
+const trackedMap = new Map();
+for (const a of [...birdeye, ...gmgn])
+  if (a) trackedMap.set(a, { address: a, label: "Smart", segment: "smart" });
+for (const w of manual) if (w?.address) trackedMap.set(w.address, w);
+const tracked = [...trackedMap.values()];
+const accountAddresses = tracked.map((w) => w.address);
+
+try {
+  await writeFile("data/tracked-wallets.json", JSON.stringify(tracked, null, 2));
+  console.log(`Wrote data/tracked-wallets.json (${tracked.length} wallets)`);
+} catch (e) {
+  console.warn("Could not write data/tracked-wallets.json:", e.message);
+}
+
 if (accountAddresses.length === 0) {
   console.error(
     "No wallet addresses to track. Auto-source failed (Birdeye + GMGN) and no " +

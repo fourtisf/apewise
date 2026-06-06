@@ -13,6 +13,22 @@ const FILE =
   process.env.SMART_WALLETS_FILE ||
   path.join(process.cwd(), "data", "smart-wallets.json");
 
+// The full resolved set the Helius webhook was last registered with (written by
+// scripts/setup-helius-webhook.mjs). Reading it guarantees walletMap recognizes
+// every tracked wallet, even if a live source (Birdeye/GMGN) is flaky right now.
+const TRACKED_FILE =
+  process.env.TRACKED_WALLETS_FILE ||
+  path.join(process.cwd(), "data", "tracked-wallets.json");
+
+async function readWalletFile(file: string): Promise<SmartWallet[]> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as SmartWallet[];
+    return Array.isArray(parsed) ? parsed.filter((w) => w?.address) : [];
+  } catch {
+    return [];
+  }
+}
+
 let cache: SmartWallet[] | null = null;
 let cachedAt = 0;
 const TTL = 30_000;
@@ -26,13 +42,10 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
   const now = Date.now();
   if (cache && now - cachedAt < TTL) return cache;
 
-  let manual: SmartWallet[] = [];
-  try {
-    const parsed = JSON.parse(await fs.readFile(FILE, "utf8")) as SmartWallet[];
-    manual = Array.isArray(parsed) ? parsed.filter((w) => w?.address) : [];
-  } catch {
-    manual = [];
-  }
+  const [manual, tracked] = await Promise.all([
+    readWalletFile(FILE),
+    readWalletFile(TRACKED_FILE),
+  ]);
 
   // Auto-source smart wallets from GMGN's leaderboard (set USE_GMGN_WALLETS=false
   // to disable). Fail-soft. Manual entries win, so your custom picks/labels stay.
@@ -57,9 +70,10 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
   }
 
   const map = new Map<string, SmartWallet>();
+  for (const w of tracked) map.set(w.address, w); // persisted webhook set (baseline)
   for (const w of gmgn) map.set(w.address, w);
   for (const w of birdeye) map.set(w.address, w);
-  for (const w of manual) map.set(w.address, w);
+  for (const w of manual) map.set(w.address, w); // manual wins (custom labels)
 
   cache = [...map.values()];
   cachedAt = now;

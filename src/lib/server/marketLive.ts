@@ -156,16 +156,23 @@ async function build(): Promise<MarketSnapshot | null> {
   const all: SmartEvent[] = [];
   tradeLists.forEach((tl, i) => {
     const list = (tl as { data?: unknown[] } | null)?.data || [];
-    for (const t of list.slice(0, 30)) {
+    // Convert ALL trades — GeckoTerminal's list order isn't guaranteed
+    // newest-first, so slicing before sorting could surface stale trades.
+    for (const t of list) {
       const ev = tradeToEvent(t, top[i]);
       if (ev && ev.amountUsd >= minUsd) all.push(ev);
     }
   });
 
+  // Newest first, then drop anything stale so the LIVE feed never shows
+  // hours-old trades (MARKET_MAX_AGE_MIN, default 180 min).
   all.sort((a, b) => b.ts - a.ts);
+  const maxAgeMs = (Number(process.env.MARKET_MAX_AGE_MIN) || 180) * 60_000;
+  const recent = all.filter((e) => Date.now() - e.ts < maxAgeMs);
+  const fresh = recent.length ? recent : all;
   const perToken = new Map<string, number>();
   const events: SmartEvent[] = [];
-  for (const e of all) {
+  for (const e of fresh) {
     const c = perToken.get(e.token) || 0;
     if (c >= 4) continue;
     perToken.set(e.token, c + 1);

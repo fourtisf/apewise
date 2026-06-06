@@ -30,6 +30,19 @@ export function Background() {
           animationDelay: "-3.5s",
         }}
       />
+      {/* soft central emerald wash — keeps lower sections from going flat-black */}
+      <div
+        className="bg-glow"
+        style={{
+          top: "52%",
+          left: "50%",
+          width: "52rem",
+          height: "42rem",
+          transform: "translate(-50%, -28%)",
+          background:
+            "radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent 68%)",
+        }}
+      />
       <div className="bg-grain" />
     </div>
   );

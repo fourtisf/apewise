@@ -88,7 +88,7 @@ export function SmartMoneyFeed() {
                 animate={{ opacity: 1, y: 0, height: "auto" }}
                 exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-white/[0.02]"
+                className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-[color:color-mix(in_srgb,var(--accent)_7%,transparent)]"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span

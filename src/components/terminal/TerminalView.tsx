@@ -50,7 +50,7 @@ type Row = FeedEvent & {
 };
 
 const RISK_DOT: Record<string, string> = {
-  ok: "#37d39a",
+  ok: "var(--accent)",
   caution: "var(--amber)",
   risk: "var(--red)",
 };
@@ -329,7 +329,7 @@ export function TerminalView() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                      className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-white/[0.02] sm:grid-cols-[1.4fr_auto_0.8fr_0.9fr_0.6fr]"
+                      className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-[color:color-mix(in_srgb,var(--accent)_7%,transparent)] sm:grid-cols-[1.4fr_auto_0.8fr_0.9fr_0.6fr]"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span
@@ -447,7 +447,7 @@ export function TerminalView() {
                   return (
                     <li
                       key={w.wallet}
-                      className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-white/[0.02]"
+                      className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-[color:color-mix(in_srgb,var(--accent)_7%,transparent)]"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="w-4 text-center font-mono text-xs text-text-muted">
@@ -508,7 +508,7 @@ export function TerminalView() {
                   return (
                     <li
                       key={t.token}
-                      className="border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-white/[0.02]"
+                      className="border-b border-[var(--border)] px-5 py-3 transition-colors last:border-0 hover:bg-[color:color-mix(in_srgb,var(--accent)_7%,transparent)]"
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-sm text-text">

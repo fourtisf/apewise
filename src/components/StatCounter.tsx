@@ -64,7 +64,7 @@ export function StatCounter({
 
   return (
     <div ref={ref}>
-      <div className="font-display text-3xl font-semibold tabular-nums text-text sm:text-4xl">
+      <div className="stat-value font-display text-3xl font-semibold tabular-nums sm:text-4xl">
         {formatted}
       </div>
       <div className="mt-1 text-sm text-text-muted">{label}</div>

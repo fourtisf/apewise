@@ -73,6 +73,7 @@ if (process.env.BIRDEYE_API_KEY) {
   const pages = Math.min(Math.ceil(want / PAGE), 10); // hard cap ~100
   const seen = new Set();
   for (let i = 0; i < pages && birdeye.length < want; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1300)); // free-tier rate limit
     const offset = i * PAGE;
     try {
       const res = await fetch(
@@ -134,11 +135,38 @@ const body = {
   ...(authHeader ? { authHeader } : {}),
 };
 
-const res = await fetch(`https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(body),
-});
+// Idempotent: reuse (and de-dupe) any existing webhook for this URL instead of
+// stacking a brand-new one on every run — otherwise Helius double-delivers swaps.
+let existing = [];
+try {
+  const r = await fetch(`https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`);
+  if (r.ok) existing = await r.json();
+} catch {
+  /* ignore — fall back to create */
+}
+const mine = (Array.isArray(existing) ? existing : []).filter(
+  (w) => w.webhookURL === webhookURL,
+);
+for (const dup of mine.slice(1)) {
+  await fetch(
+    `https://api.helius.xyz/v0/webhooks/${dup.webhookID}?api-key=${apiKey}`,
+    { method: "DELETE" },
+  ).catch(() => {});
+  console.log(`🧹 Removed duplicate webhook ${dup.webhookID}`);
+}
+const keep = mine[0];
+
+const res = await fetch(
+  keep
+    ? `https://api.helius.xyz/v0/webhooks/${keep.webhookID}?api-key=${apiKey}`
+    : `https://api.helius.xyz/v0/webhooks?api-key=${apiKey}`,
+  {
+    method: keep ? "PUT" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  },
+);
+console.log(keep ? `Updated existing webhook ${keep.webhookID}` : "Created new webhook");
 
 console.log("HTTP", res.status);
 console.log(await res.text());

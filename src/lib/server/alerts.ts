@@ -61,6 +61,13 @@ const SEG_EMOJI: Record<SmartEvent["segment"], string> = {
   kol: "🎤",
 };
 
+const SEG_LABEL: Record<SmartEvent["segment"], string> = {
+  smart: "Smart money",
+  sniper: "Sniper",
+  insider: "Insider",
+  kol: "KOL",
+};
+
 function fmtAge(min?: number): string | null {
   if (min == null) return null;
   if (min < 60) return `${min}m`;
@@ -71,10 +78,10 @@ function fmtAge(min?: number): string | null {
 function riskLine(ev: SmartEvent): string | null {
   const r = ev.risk;
   if (!r || r.verdict === "unknown") return null;
-  if (r.verdict === "ok") return "🛡 Anti-rug: clean";
-  if (r.verdict === "caution")
-    return `⚠️ Caution: ${r.reasons.slice(0, 2).join(", ") || "checks flagged"}`;
-  return `🚨 High risk: ${r.reasons.slice(0, 2).join(", ") || "checks flagged"}`;
+  if (r.verdict === "ok") return "🛡 Anti-rug: passed";
+  const reasons = r.reasons.slice(0, 2).join(" · ") || "checks flagged";
+  if (r.verdict === "caution") return `⚠️ Caution · ${reasons}`;
+  return `⛔ High risk · ${reasons}`;
 }
 
 function buyLink(mint: string): string {
@@ -122,16 +129,22 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
   }
 
   const verb = ev.action === "buy" ? "BUY" : "SELL";
-  const who = ev.label ? `${ev.label} (${ev.segment})` : `${ev.segment} wallet`;
+  const verbed = ev.action === "buy" ? "bought" : "sold";
+  const role = SEG_LABEL[ev.segment];
+  // Avoid "Smart money (smart)" when the label just repeats the segment.
+  const named =
+    ev.label && ev.label.toLowerCase() !== ev.segment ? ` (${ev.label})` : "";
+
   const metrics = [
     ev.liquidityUsd != null ? `💧 Liq ${fmtUsd(ev.liquidityUsd)}` : null,
-    ev.marketCapUsd != null ? `🧢 MC ${fmtUsd(ev.marketCapUsd)}` : null,
-    fmtAge(ev.tokenAgeMin) ? `⏱ ${fmtAge(ev.tokenAgeMin)}` : null,
+    ev.marketCapUsd != null ? `💰 MC ${fmtUsd(ev.marketCapUsd)}` : null,
+    fmtAge(ev.tokenAgeMin) ? `🕒 ${fmtAge(ev.tokenAgeMin)}` : null,
   ].filter(Boolean);
 
   const lines = [
-    `${SEG_EMOJI[ev.segment]} <b>SMART ${verb}</b> · <b>$${ev.token}</b>`,
-    `${who} <code>${ev.walletShort}</code> ${ev.action === "buy" ? "bought" : "sold"} <b>${fmtUsd(ev.amountUsd)}</b>`,
+    `${SEG_EMOJI[ev.segment]} <b>SMART MONEY</b> · ${verb}`,
+    `<b>$${ev.token}</b> — ${role}${named}`,
+    `<code>${ev.walletShort}</code> ${verbed} <b>${fmtUsd(ev.amountUsd)}</b>`,
     metrics.length ? metrics.join("  ·  ") : null,
     riskLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,

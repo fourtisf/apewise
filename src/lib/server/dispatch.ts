@@ -24,9 +24,9 @@ export async function dispatchAlerts(): Promise<number> {
   let posted = 0;
   for (const e of candidates) {
     const lines = [
-      `🟢 <b>BIG BUY</b> · <b>$${e.token}</b>`,
+      `🐋 <b>WHALE BUY</b> · <b>$${e.token}</b>`,
       `<code>${e.walletShort}</code> bought <b>${fmtUsd(e.amountUsd)}</b>`,
-      e.marketCapUsd != null ? `🧢 MC ${fmtUsd(e.marketCapUsd)}` : null,
+      e.marketCapUsd != null ? `💰 MC ${fmtUsd(e.marketCapUsd)}` : null,
       e.tokenMint ? `<code>${e.tokenMint}</code>` : null,
     ].filter(Boolean) as string[];
     if (await postToChannel(lines.join("\n"), chartKeyboard(e.tokenMint))) {

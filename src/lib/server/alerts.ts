@@ -91,16 +91,22 @@ function buyLink(mint: string): string {
     : `https://dexscreener.com/solana/${mint}`;
 }
 
-export function chartKeyboard(mint?: string) {
+export function chartKeyboard(mint?: string, socials?: SmartEvent["socials"]) {
   if (!mint) return undefined;
-  return {
-    inline_keyboard: [
-      [
-        { text: "⚡ Buy", url: buyLink(mint) },
-        { text: "📊 Chart", url: `https://dexscreener.com/solana/${mint}` },
-      ],
+  const rows: { text: string; url: string }[][] = [
+    [
+      { text: "⚡ Buy", url: buyLink(mint) },
+      { text: "📊 Chart", url: `https://dexscreener.com/solana/${mint}` },
     ],
-  };
+  ];
+  // The signaled token's own community links, when DexScreener has them.
+  const social: { text: string; url: string }[] = [];
+  if (socials?.website) social.push({ text: "🌐 Website", url: socials.website });
+  if (socials?.twitter) social.push({ text: "🐦 X", url: socials.twitter });
+  if (socials?.telegram)
+    social.push({ text: "💬 Telegram", url: socials.telegram });
+  if (social.length) rows.push(social);
+  return { inline_keyboard: rows };
 }
 
 // Per wallet+token cooldown (anti-spam).
@@ -150,5 +156,5 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
   ].filter(Boolean) as string[];
 
-  await postToChannel(lines.join("\n"), chartKeyboard(ev.tokenMint));
+  await postToChannel(lines.join("\n"), chartKeyboard(ev.tokenMint, ev.socials));
 }

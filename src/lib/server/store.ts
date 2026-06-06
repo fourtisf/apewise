@@ -10,6 +10,13 @@ export interface TokenRisk {
   score?: number;
 }
 
+/** The signaled token's own community links (from DexScreener). */
+export interface TokenSocials {
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+}
+
 /** A normalized smart-money event (one tracked-wallet swap), chain-agnostic. */
 export interface SmartEvent {
   id: string;
@@ -31,6 +38,7 @@ export interface SmartEvent {
   liquidityUsd?: number;
   tokenAgeMin?: number;
   risk?: TokenRisk;
+  socials?: TokenSocials;
 }
 
 const MAX = 2000;

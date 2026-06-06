@@ -27,6 +27,7 @@ export async function enrichEvent(ev: SmartEvent): Promise<SmartEvent> {
         Math.round((Date.now() - market.pairCreatedAt) / 60_000),
       );
     }
+    if (market.socials) ev.socials = market.socials;
   }
   ev.risk = risk;
   return ev;

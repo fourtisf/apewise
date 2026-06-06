@@ -1,4 +1,5 @@
 import { getMarketSnapshot } from "./marketLive";
+import { getTokenMarket } from "./market";
 import { postToChannel, fmtUsd, chartKeyboard } from "./alerts";
 
 /**
@@ -23,13 +24,17 @@ export async function dispatchAlerts(): Promise<number> {
 
   let posted = 0;
   for (const e of candidates) {
+    // Token's own community links (DexScreener, cached) → social buttons.
+    const socials = e.tokenMint
+      ? (await getTokenMarket(e.tokenMint).catch(() => null))?.socials
+      : undefined;
     const lines = [
       `🐋 <b>WHALE BUY</b> · <b>$${e.token}</b>`,
       `<code>${e.walletShort}</code> bought <b>${fmtUsd(e.amountUsd)}</b>`,
       e.marketCapUsd != null ? `💰 MC ${fmtUsd(e.marketCapUsd)}` : null,
       e.tokenMint ? `<code>${e.tokenMint}</code>` : null,
     ].filter(Boolean) as string[];
-    if (await postToChannel(lines.join("\n"), chartKeyboard(e.tokenMint))) {
+    if (await postToChannel(lines.join("\n"), chartKeyboard(e.tokenMint, socials))) {
       alerted.add(e.id);
       posted++;
     }

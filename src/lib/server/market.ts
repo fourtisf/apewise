@@ -32,12 +32,15 @@ async function fetchJson(url: string, ms = 2500): Promise<unknown | null> {
   }
 }
 
+import type { TokenSocials } from "./store";
+
 export interface TokenMarket {
   symbol: string;
   priceUsd?: number;
   marketCapUsd?: number;
   liquidityUsd?: number;
   pairCreatedAt?: number; // ms
+  socials?: TokenSocials;
 }
 
 interface DexPair {
@@ -47,6 +50,28 @@ interface DexPair {
   marketCap?: number;
   pairCreatedAt?: number;
   baseToken?: { address?: string; symbol?: string };
+  info?: {
+    websites?: { label?: string; url?: string }[];
+    socials?: { type?: string; url?: string }[];
+  };
+}
+
+/** Pull the token's own website / X / Telegram from a DexScreener pair's info. */
+function parseSocials(info?: DexPair["info"]): TokenSocials | undefined {
+  if (!info) return undefined;
+  const out: TokenSocials = {};
+  const web = info.websites?.find((w) => w?.url)?.url;
+  if (web) out.website = web;
+  for (const s of info.socials || []) {
+    const url = s?.url;
+    if (!url) continue;
+    const t = (s.type || "").toLowerCase();
+    if (!out.twitter && (t === "twitter" || /(?:twitter\.com|\/\/x\.com)/i.test(url)))
+      out.twitter = url;
+    else if (!out.telegram && (t === "telegram" || /t\.me\//i.test(url)))
+      out.telegram = url;
+  }
+  return out.website || out.twitter || out.telegram ? out : undefined;
 }
 
 const marketCache = new Map<string, { at: number; data: TokenMarket }>();
@@ -67,12 +92,15 @@ export async function getTokenMarket(mint: string): Promise<TokenMarket> {
     const best = pairs.reduce((a, b) =>
       (b.liquidity?.usd || 0) > (a.liquidity?.usd || 0) ? b : a,
     );
+    // Prefer the most-liquid pair that actually carries token info/socials.
+    const withInfo = pairs.find((p) => p.info) || best;
     data = {
       symbol: best.baseToken?.symbol || shortMint(mint),
       priceUsd: best.priceUsd ? Number(best.priceUsd) : undefined,
       marketCapUsd: best.marketCap ?? best.fdv,
       liquidityUsd: best.liquidity?.usd,
       pairCreatedAt: best.pairCreatedAt,
+      socials: parseSocials(withInfo.info),
     };
   }
 

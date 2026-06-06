@@ -23,6 +23,9 @@ function authorized(req: Request): boolean {
 
 export async function POST(req: Request) {
   if (!authorized(req)) {
+    console.warn(
+      "[helius] 401 unauthorized — the registered authHeader != INGEST_SECRET",
+    );
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -60,6 +63,11 @@ export async function POST(req: Request) {
   const fresh = await addEvents(parsed);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
 
+  // Observability: shows whether Helius is delivering, and whether the swaps
+  // match tracked wallets (rx>0 but parsed=0 ⇒ wallets not recognized).
+  console.log(
+    `[helius] rx=${txs.length} parsed=${parsed.length} ingested=${fresh.length}`,
+  );
   return NextResponse.json({
     ok: true,
     parsed: parsed.length,

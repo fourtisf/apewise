@@ -8,6 +8,7 @@ import {
 import { addEvents, type SmartEvent } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
+import { enqueueForTweet } from "@/lib/server/tweets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +61,14 @@ export async function POST(req: Request) {
   await Promise.allSettled(parsed.map((e) => enrichEvent(e)));
   const fresh = await addEvents(parsed);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
+  // Queue qualifying buys for the strictly-gated auto-tweet channel (a paced
+  // worker drains the pool and posts at most one — see lib/server/tweets.ts).
+  // Fail-soft: the tweet path must never break webhook ingestion.
+  try {
+    enqueueForTweet(fresh);
+  } catch (e) {
+    console.error("[helius] enqueueForTweet failed:", e);
+  }
 
   // Observability: shows whether Helius is delivering + whether swaps parse.
   console.log(

@@ -37,6 +37,7 @@ const cfg = (over: Partial<TweetConfig> = {}): TweetConfig => ({
   showWinRate: true,
   includeChartLink: false,
   suffix: "",
+  mirrorTelegram: false,
   ...over,
 });
 

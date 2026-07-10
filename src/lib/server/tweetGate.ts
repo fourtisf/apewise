@@ -44,6 +44,7 @@ export interface TweetConfig {
   showWinRate: boolean;
   includeChartLink: boolean;
   suffix: string;
+  mirrorTelegram: boolean; // also post premium picks to the TG signals channel
 }
 
 function num(name: string, def: number): number {
@@ -143,6 +144,7 @@ export function loadConfig(): TweetConfig {
     showWinRate: bool("TWEET_SHOW_WINRATE", true),
     includeChartLink: bool("TWEET_INCLUDE_CHART_LINK", false),
     suffix: process.env.TWEET_SUFFIX || "",
+    mirrorTelegram: bool("TWEET_MIRROR_TELEGRAM", true),
   };
 }
 

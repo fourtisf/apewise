@@ -4,6 +4,7 @@ import type { SmartEvent } from "./store";
 import type { WalletQuality } from "./walletQuality";
 import { walletQualityMap } from "./walletQuality";
 import { postTweet, twitterConfigured } from "./twitter";
+import { postToChannel, socialLinks } from "./alerts";
 import {
   loadConfig,
   buildTweet,
@@ -120,6 +121,24 @@ function nextStyle(cfg: TweetConfig): string {
   return list[styleCounter++ % list.length];
 }
 
+const escHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Post the premium pick to the Telegram signals channel (tweet + links + mint). */
+async function mirrorToTelegram(
+  text: string,
+  ev: SmartEvent,
+  conv: number,
+): Promise<void> {
+  const lines = [
+    `🏆 <b>Top signal</b> · conviction ${conv}/100`,
+    escHtml(text),
+    ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
+    socialLinks(ev.tokenMint, ev.socials),
+  ].filter(Boolean) as string[];
+  await postToChannel(lines.join("\n"));
+}
+
 /**
  * Drain the pool, enforce the global rate gate, and post at most ONE tweet —
  * the highest-conviction candidate that clears every gate. Called on an interval
@@ -182,6 +201,13 @@ async function runDispatch(): Promise<DispatchResult> {
       token: best.ev.token,
       tweetId: res.id,
     });
+    // Mirror the premium pick to the Telegram signals channel (richer there:
+    // the bare tweet + chart/socials + mint). Fail-soft — never blocks the tweet.
+    if (cfg.mirrorTelegram) {
+      await mirrorToTelegram(text, best.ev, best.conv).catch((e) =>
+        console.error("[tweet] tg mirror failed:", e),
+      );
+    }
     console.log(
       `[tweet] posted (conv=${best.conv}) $${best.ev.token} ${res.id ?? ""}`.trim(),
     );

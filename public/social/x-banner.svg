@@ -1,70 +1,41 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" width="1500" height="500">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#05090C"/>
-      <stop offset="60%" stop-color="#070F0C"/>
-      <stop offset="100%" stop-color="#04120C"/>
+      <stop offset="0%" stop-color="#05090C"/><stop offset="60%" stop-color="#070F0C"/><stop offset="100%" stop-color="#04120C"/>
     </linearGradient>
-    <linearGradient id="em" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#6BF3BE"/>
-      <stop offset="60%" stop-color="#22D69A"/>
-      <stop offset="100%" stop-color="#0BAE79"/>
+    <linearGradient id="em" x1="0" y1="-1" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8CF7CF"/><stop offset="55%" stop-color="#22D69A"/><stop offset="100%" stop-color="#0BAE79"/>
     </linearGradient>
-    <linearGradient id="emDark" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0E7A57"/>
-      <stop offset="100%" stop-color="#075C40"/>
+    <linearGradient id="emW" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6BF3BE"/><stop offset="100%" stop-color="#0BAE79"/>
     </linearGradient>
-    <radialGradient id="eye" cx="50%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#08140E"/>
-      <stop offset="100%" stop-color="#020604"/>
-    </radialGradient>
     <radialGradient id="aura" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#12C98C" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#12C98C" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#12C98C" stop-opacity="0.42"/><stop offset="100%" stop-color="#12C98C" stop-opacity="0"/>
     </radialGradient>
     <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
       <path d="M46 0H0V46" fill="none" stroke="#1BE39C" stroke-width="1" opacity="0.05"/>
     </pattern>
+    <filter id="glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
 
   <rect width="1500" height="500" fill="url(#bg)"/>
   <rect width="1500" height="500" fill="url(#grid)"/>
-  <ellipse cx="1230" cy="250" rx="420" ry="360" fill="url(#aura)"/>
-  <!-- faint upward chart line -->
+  <ellipse cx="1235" cy="250" rx="430" ry="360" fill="url(#aura)"/>
   <path d="M60 400 L300 360 L470 388 L640 300 L820 336 L1000 210 L1160 250 L1440 96" fill="none" stroke="#1BE39C" stroke-width="3" opacity="0.14"/>
 
-  <!-- ape mark (right) -->
-  <g transform="translate(1235,250) scale(1.02) translate(-200,-205)">
-    <circle cx="116" cy="170" r="40" fill="url(#em)"/>
-    <circle cx="284" cy="170" r="40" fill="url(#em)"/>
-    <circle cx="116" cy="170" r="19" fill="url(#emDark)"/>
-    <circle cx="284" cy="170" r="19" fill="url(#emDark)"/>
-    <path d="M200,88 C150,88 118,118 115,164 C113,200 119,242 140,274 C158,302 178,314 200,314 C222,314 242,302 260,274 C281,242 287,200 285,164 C282,118 250,88 200,88 Z" fill="url(#em)"/>
-    <path d="M200,205 C172,205 156,226 158,255 C160,285 178,300 200,300 C222,300 240,285 242,255 C244,226 228,205 200,205 Z" fill="url(#emDark)" opacity="0.28"/>
-    <path d="M124,155 C158,130 242,130 276,155 C258,148 242,149 200,151 C158,149 140,148 124,155 Z" fill="#06503A"/>
-    <ellipse cx="160" cy="182" rx="21" ry="15" fill="url(#eye)"/>
-    <ellipse cx="240" cy="182" rx="21" ry="15" fill="url(#eye)"/>
-    <circle cx="166" cy="178" r="4.5" fill="#9BF7D6"/>
-    <circle cx="234" cy="178" r="4.5" fill="#9BF7D6"/>
-    <path d="M168,240 C182,230 218,230 232,240 C240,247 236,258 224,261 C214,263 186,263 176,261 C164,258 160,247 168,240 Z" fill="url(#eye)"/>
-    <ellipse cx="192" cy="250" rx="3.4" ry="6.5" fill="#0BAE79" opacity="0.55"/>
-    <ellipse cx="208" cy="250" rx="3.4" ry="6.5" fill="#0BAE79" opacity="0.55"/>
-    <path d="M180,283 C192,290 208,290 220,283" fill="none" stroke="#06503A" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <!-- whale fluke mark (right) -->
+  <g transform="translate(1235,246) scale(1.55)" filter="url(#glow)">
+    <path d="M0,-34 C-18,-52 -46,-78 -104,-96 C-70,-62 -36,-30 -12,8 C-7,34 -3,58 0,80 C3,58 7,34 12,8 C36,-30 70,-62 104,-96 C46,-78 18,-52 0,-34 Z" fill="url(#em)"/>
   </g>
 
-  <!-- wordmark -->
-  <text x="86" y="228" font-size="128" font-weight="bold" letter-spacing="1" fill="#EAF3EE"><tspan fill="url(#em)">APE</tspan>WISE</text>
-  <!-- tagline -->
-  <text x="92" y="288" font-size="35" font-weight="bold" fill="#9FB6AC" letter-spacing="0.5">Smart-money &amp; whale alpha on Solana</text>
-  <!-- feature pills (kept clear of the bottom-left avatar overlap) -->
-  <g transform="translate(600,352)" font-size="24" font-weight="bold">
-    <g fill="#12C98C">
-      <circle cx="8" cy="-8" r="6"/><text x="24" y="0" fill="#BFE9D8">Whale tracker</text>
-      <circle cx="228" cy="-8" r="6"/><text x="244" y="0" fill="#BFE9D8">High-win-rate wallets</text>
-      <circle cx="560" cy="-8" r="6"/><text x="576" y="0" fill="#BFE9D8">24/7 autonomous</text>
-    </g>
+  <text x="86" y="230" font-size="128" font-weight="bold" letter-spacing="1" fill="#EAF3EE"><tspan fill="url(#emW)">APE</tspan>WISE</text>
+  <text x="92" y="290" font-size="35" font-weight="bold" fill="#9FB6AC" letter-spacing="0.5">Smart-money &amp; whale alpha on Solana</text>
+
+  <g transform="translate(600,352)" font-size="24" font-weight="bold" fill="#12C98C">
+    <circle cx="8" cy="-8" r="6"/><text x="24" y="0" fill="#BFE9D8">Whale tracker</text>
+    <circle cx="228" cy="-8" r="6"/><text x="244" y="0" fill="#BFE9D8">High-win-rate wallets</text>
+    <circle cx="560" cy="-8" r="6"/><text x="576" y="0" fill="#BFE9D8">24/7 autonomous</text>
   </g>
-  <!-- handle + chains bottom-right -->
   <text x="600" y="430" font-size="27" font-weight="bold" fill="#12C98C" letter-spacing="1">@apewiseai</text>
   <text x="600" y="466" font-size="21" fill="#6E8880" letter-spacing="1.5">SOLANA · BSC · BASE · ETHEREUM · TRON</text>
 </svg>

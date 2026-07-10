@@ -12,6 +12,7 @@ import {
   globalRateGate,
   noveltyBlocked,
   type PostedTweet,
+  type TweetConfig,
 } from "./tweetGate";
 
 /**
@@ -112,6 +113,13 @@ export interface DispatchResult {
 // request) both clearing the rate gate and posting before either records.
 let dispatching = false;
 
+// Round-robin over the enabled copy styles so consecutive tweets read varied.
+let styleCounter = 0;
+function nextStyle(cfg: TweetConfig): string {
+  const list = cfg.styles && cfg.styles.length ? cfg.styles : ["classic"];
+  return list[styleCounter++ % list.length];
+}
+
 /**
  * Drain the pool, enforce the global rate gate, and post at most ONE tweet —
  * the highest-conviction candidate that clears every gate. Called on an interval
@@ -161,7 +169,7 @@ async function runDispatch(): Promise<DispatchResult> {
 
   ranked.sort((a, b) => b.conv - a.conv);
   const best = ranked[0];
-  const text = buildTweet(best.ev, best.q, cfg);
+  const text = buildTweet(best.ev, best.q, cfg, nextStyle(cfg));
   const res = await postTweet(text);
 
   if (res.ok) {

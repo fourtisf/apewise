@@ -47,10 +47,43 @@ const bool = (n, d) => {
   return r === "true";
 };
 
+// Mirror of STYLE_MAP in src/lib/server/tweetGate.ts.
+const STYLE_MAP = {
+  classic: (p) =>
+    `🐳 A ${p.whaleTag} just bought ${p.amount} of ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+  alert: (p) =>
+    `🚨 Smart-money buy — ${p.amount} into ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+  punchy: (p) =>
+    `👀 A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped ${p.amount} into ${p.tok}` +
+    (p.mc ? ` (${p.mc} MC)` : ""),
+  conviction: (p) =>
+    `💎 High-conviction buy: ${p.amount} of ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+  flow: (p) =>
+    `📊 Smart-money inflow → ${p.tok}: ${p.amount}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? `. Wallet win-rate ${p.wr}%` : ""),
+  fomo: (p) =>
+    `🔥 Whales are loading ${p.tok} — ${p.amount} buy` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+  minimal: (p) =>
+    `🐳 ${p.amount} → ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% WR` : ""),
+};
+const STYLE_KEYS = Object.keys(STYLE_MAP);
+
+function parseStyles() {
+  const list = (process.env.TWEET_STYLES ?? "")
+    .split(",").map((s) => s.trim().toLowerCase()).filter((k) => STYLE_MAP[k]);
+  return list.length ? list : [...STYLE_KEYS];
+}
+
 const cfg = {
   minWinRate: num("TWEET_MIN_WIN_RATE", 80),
   minConviction: num("TWEET_MIN_CONVICTION", 70),
   minUsd: num("TWEET_MIN_USD", 10000),
+  styles: parseStyles(),
   whaleTag: process.env.TWEET_WHALE_TAG || "smart-money whale",
   showWinRate: bool("TWEET_SHOW_WINRATE", true),
   includeChartLink: bool("TWEET_INCLUDE_CHART_LINK", false),
@@ -72,17 +105,13 @@ function cashtag(sym) {
   const s = (sym || "").replace(/^\$+/, "").trim();
   return /^[A-Za-z][A-Za-z0-9]{0,29}$/.test(s) ? `$${s}` : s || "token";
 }
-function buildTweet(ev) {
+function buildTweet(ev, styleKey) {
   const amount = fmtUsdTweet(ev.amountUsd);
   const tok = cashtag(ev.token);
   const mc = ev.marketCapUsd != null ? fmtUsdTweet(ev.marketCapUsd) : "";
-  let line = `🐳 A ${cfg.whaleTag} just bought ${amount} of ${tok}`;
-  if (mc) line += ` at ${mc} MC`;
-  const flair =
-    cfg.showWinRate && ev.observed && ev.winRate > 0
-      ? ` · ${ev.winRate}% win-rate wallet`
-      : "";
-  let out = line + flair;
+  const wr = cfg.showWinRate && ev.observed && ev.winRate > 0 ? ev.winRate : null;
+  const key = STYLE_MAP[styleKey] ? styleKey : cfg.styles[0] || "classic";
+  let out = STYLE_MAP[key]({ whaleTag: cfg.whaleTag, amount, tok, mc, wr });
   if (cfg.includeChartLink && ev.tokenMint) {
     const link = ` 📊 dexscreener.com/solana/${ev.tokenMint}`;
     if (out.length + link.length <= 280) out += link;
@@ -91,7 +120,6 @@ function buildTweet(ev) {
     const suf = ` ${cfg.suffix}`;
     if (out.length + suf.length <= 280) out += suf;
   }
-  if (out.length > 280) out = line;
   if (out.length > 280) out = out.slice(0, 279) + "…";
   return out;
 }
@@ -116,15 +144,28 @@ const samples = [
   { token: "Fartcoin", amountUsd: 12000, marketCapUsd: 146_860_000, liquidityUsd: 300000, winRate: 80, pnlUsd: 90000, observed: true },
 ];
 
+// ── A) semua gaya copy (rotasi otomatis tiap tweet) ──
+const demo = samples[3]; // $210K BONK, 93% WR
+console.log(`\n=== ${STYLE_KEYS.length} GAYA COPY (dirotasi otomatis tiap tweet) ===`);
+console.log(`aktif: ${cfg.styles.join(", ")}\n`);
+for (const key of STYLE_KEYS) {
+  const on = cfg.styles.includes(key) ? "●" : "○";
+  const text = buildTweet(demo, key);
+  console.log(`${on} ${key.padEnd(11)} (${String(text.length).padStart(3)} chars)`);
+  console.log(`   ${text}\n`);
+}
+
+// ── B) uji gate: mana yang lolos, pakai gaya yang dirotasi ──
 console.log(
-  `\nGate aktif:  WR ≥ ${cfg.minWinRate}%   ·   conviction ≥ ${cfg.minConviction}   ·   min buy ${fmtUsdTweet(cfg.minUsd)}\n`,
+  `=== GATE:  WR ≥ ${cfg.minWinRate}%  ·  conviction ≥ ${cfg.minConviction}  ·  min buy ${fmtUsdTweet(cfg.minUsd)} ===\n`,
 );
+let rot = 0;
 for (const s of samples) {
   const conv = conviction(s);
   const wrOk = s.winRate >= cfg.minWinRate;
   const sizeOk = s.amountUsd >= cfg.minUsd;
   const pass = wrOk && sizeOk && conv >= cfg.minConviction;
-  const mark = pass ? "✅ TWEET " : "❌ SKIP  ";
+  const mark = pass ? "✅ TWEET" : "❌ SKIP ";
   const why = pass
     ? ""
     : "  ← " +
@@ -135,12 +176,16 @@ for (const s of samples) {
       ]
         .filter(Boolean)
         .join(", ");
-  const text = buildTweet(s);
-  console.log(`${mark}[conv ${String(conv).padStart(2)}] (${String(text.length).padStart(3)} chars)${why}`);
+  // pakai gaya yang dirotasi, seperti di produksi (hanya untuk yang lolos)
+  const styleKey = cfg.styles[rot % cfg.styles.length];
+  if (pass) rot++;
+  const text = buildTweet(s, styleKey);
+  console.log(`${mark} [conv ${String(conv).padStart(2)}] (${String(text.length).padStart(3)} chars)${why}`);
   console.log(`   ${text}\n`);
 }
 console.log(
-  "Yang ✅ = bakal di-tweet dengan setting sekarang. Ubah ambang di .env.local\n" +
-    "(TWEET_MIN_WIN_RATE / TWEET_MIN_CONVICTION / TWEET_MIN_USD) lalu jalankan lagi.\n" +
-    "Force-post satu ke X:  node scripts/tweet-test.mjs '<tempel salah satu baris tweet di atas>'\n",
+  "Yang ✅ = bakal di-tweet. Atur di .env.local:\n" +
+    "  TWEET_STYLES=classic,alert,punchy,...   (pilih gaya yg dipakai; default semua)\n" +
+    "  TWEET_MIN_WIN_RATE / TWEET_MIN_CONVICTION / TWEET_MIN_USD   (ketatnya)\n" +
+    "Force-post satu ke X:  node scripts/tweet-test.mjs '<tempel salah satu baris tweet>'\n",
 );

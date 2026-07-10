@@ -32,6 +32,7 @@ const cfg = (over: Partial<TweetConfig> = {}): TweetConfig => ({
   maxPerDay: 24,
   pairCooldownMin: 720,
   tokenCooldownMin: 180,
+  styles: ["classic", "alert", "punchy", "conviction", "flow", "fomo", "minimal"],
   whaleTag: "smart-money whale",
   showWinRate: true,
   includeChartLink: false,
@@ -103,6 +104,18 @@ test("buildTweet: no flair when win-rate not observed", () => {
 test("buildTweet: never exceeds 280 chars", () => {
   const t = buildTweet(ev({ token: "A".repeat(40) }), quality(), cfg({ suffix: "x".repeat(400) }));
   assert.ok(t.length <= 280);
+});
+
+test("buildTweet: each style renders distinct, valid copy", () => {
+  const keys = ["classic", "alert", "punchy", "conviction", "flow", "fomo", "minimal"];
+  const texts = keys.map((k) => buildTweet(ev(), quality(), cfg(), k));
+  assert.equal(new Set(texts).size, texts.length); // all different
+  for (const t of texts) {
+    assert.ok(t.length <= 280);
+    assert.match(t, /\$PEPE/); // cashtag present in every style
+  }
+  // unknown style key falls back to the first enabled style (classic)
+  assert.equal(buildTweet(ev(), quality(), cfg(), "nope"), buildTweet(ev(), quality(), cfg(), "classic"));
 });
 
 // ── hard gate ───────────────────────────────────────────────────────────────

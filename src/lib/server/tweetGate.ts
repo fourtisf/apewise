@@ -39,6 +39,7 @@ export interface TweetConfig {
   pairCooldownMin: number;
   tokenCooldownMin: number;
   // Copy
+  styles: string[]; // enabled copy-style keys, rotated per tweet for variety
   whaleTag: string;
   showWinRate: boolean;
   includeChartLink: boolean;
@@ -55,6 +56,62 @@ function bool(name: string, def: boolean): boolean {
   const raw = process.env[name];
   if (raw == null || raw === "") return def;
   return raw === "true";
+}
+
+/**
+ * Tweet copy styles. The dispatcher rotates through the enabled set
+ * (TWEET_STYLES) so the timeline reads varied/organic instead of one repeated
+ * template — which also stops X from flagging near-duplicate structure. Each
+ * takes pre-formatted pieces and returns the tweet body (before suffix/link).
+ * Add or edit freely.
+ */
+export interface StyleParts {
+  whaleTag: string;
+  amount: string; // "$210K"
+  tok: string; // "$BONK"
+  mc: string; // "$2.1B" or ""
+  wr: number | null; // win-rate %, or null when not shown
+}
+
+export const STYLE_MAP: Record<string, (p: StyleParts) => string> = {
+  classic: (p) =>
+    `🐳 A ${p.whaleTag} just bought ${p.amount} of ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+  alert: (p) =>
+    `🚨 Smart-money buy — ${p.amount} into ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+  punchy: (p) =>
+    `👀 A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped ${p.amount} into ${p.tok}` +
+    (p.mc ? ` (${p.mc} MC)` : ""),
+  conviction: (p) =>
+    `💎 High-conviction buy: ${p.amount} of ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+  flow: (p) =>
+    `📊 Smart-money inflow → ${p.tok}: ${p.amount}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? `. Wallet win-rate ${p.wr}%` : ""),
+  fomo: (p) =>
+    `🔥 Whales are loading ${p.tok} — ${p.amount} buy` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+  minimal: (p) =>
+    `🐳 ${p.amount} → ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` · ${p.wr}% WR` : ""),
+};
+
+export const STYLE_KEYS = Object.keys(STYLE_MAP);
+
+/** Enabled style keys from TWEET_STYLES (comma list); defaults to all. */
+function parseStyles(): string[] {
+  const list = (process.env.TWEET_STYLES ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((k) => STYLE_MAP[k]);
+  return list.length ? list : [...STYLE_KEYS];
 }
 
 export function loadConfig(): TweetConfig {
@@ -81,6 +138,7 @@ export function loadConfig(): TweetConfig {
     maxPerDay: num("TWEET_MAX_PER_DAY", 24),
     pairCooldownMin: num("TWEET_PAIR_COOLDOWN_MIN", 720),
     tokenCooldownMin: num("TWEET_TOKEN_COOLDOWN_MIN", 180),
+    styles: parseStyles(),
     whaleTag: process.env.TWEET_WHALE_TAG || "smart-money whale",
     showWinRate: bool("TWEET_SHOW_WINRATE", true),
     includeChartLink: bool("TWEET_INCLUDE_CHART_LINK", false),
@@ -114,20 +172,27 @@ export function buildTweet(
   ev: SmartEvent,
   quality: WalletQuality | undefined,
   cfg: TweetConfig,
+  styleKey?: string,
 ): string {
   const amount = fmtUsdTweet(ev.amountUsd);
   const tok = cashtag(ev.token);
   const mc = ev.marketCapUsd != null ? fmtUsdTweet(ev.marketCapUsd) : "";
-
-  let line = `🐳 A ${cfg.whaleTag} just bought ${amount} of ${tok}`;
-  if (mc) line += ` at ${mc} MC`;
-
-  const flair =
+  const wr =
     cfg.showWinRate && quality?.observed && quality.winRate > 0
-      ? ` · ${quality.winRate}% win-rate wallet`
-      : "";
+      ? quality.winRate
+      : null;
 
-  let out = line + flair;
+  // Pick a style: explicit key wins; else the first enabled; else classic.
+  const enabled = cfg.styles && cfg.styles.length ? cfg.styles : ["classic"];
+  const key =
+    styleKey && STYLE_MAP[styleKey]
+      ? styleKey
+      : STYLE_MAP[enabled[0]]
+        ? enabled[0]
+        : "classic";
+  const line = STYLE_MAP[key]({ whaleTag: cfg.whaleTag, amount, tok, mc, wr });
+
+  let out = line;
   if (cfg.includeChartLink && ev.tokenMint) {
     const link = ` 📊 dexscreener.com/solana/${ev.tokenMint}`;
     if (out.length + link.length <= 280) out += link;
@@ -136,7 +201,7 @@ export function buildTweet(
     const suf = ` ${cfg.suffix}`;
     if (out.length + suf.length <= 280) out += suf;
   }
-  if (out.length > 280) out = line; // drop flair/link first
+  if (out.length > 280) out = line; // drop suffix/link first
   if (out.length > 280) out = out.slice(0, 279) + "…";
   return out;
 }

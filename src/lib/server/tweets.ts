@@ -8,6 +8,8 @@ import { postToChannel, socialLinks } from "./alerts";
 import {
   loadConfig,
   buildTweet,
+  fmtUsdTweet,
+  cashtag,
   hardGate,
   convictionScore,
   globalRateGate,
@@ -124,18 +126,52 @@ function nextStyle(cfg: TweetConfig): string {
 const escHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Post the premium pick to the Telegram signals channel (tweet + links + mint). */
+function fmtAgeShort(min?: number): string | null {
+  if (min == null) return null;
+  if (min < 60) return `${min}m`;
+  if (min < 1440) return `${Math.round(min / 60)}h`;
+  const d = min / 1440;
+  return d < 365 ? `${Math.round(d)}d` : `${(d / 365).toFixed(1)}y`;
+}
+
+/**
+ * Degen-professional Telegram post for a premium pick: hype header + scannable
+ * metrics + edge (win-rate) + safety (anti-rug) + chart/socials. The raw
+ * conviction score is hidden (only a "high conviction" badge when it's actually
+ * high) so a weak number never undercuts the signal.
+ */
 async function mirrorToTelegram(
-  text: string,
   ev: SmartEvent,
+  quality: WalletQuality | undefined,
   conv: number,
 ): Promise<void> {
+  const amount = fmtUsdTweet(ev.amountUsd);
+  const tok = escHtml(cashtag(ev.token));
+  const metrics = [
+    ev.marketCapUsd != null ? `💰 MC ${fmtUsdTweet(ev.marketCapUsd)}` : null,
+    ev.liquidityUsd != null ? `💧 Liq ${fmtUsdTweet(ev.liquidityUsd)}` : null,
+    fmtAgeShort(ev.tokenAgeMin) ? `🕐 ${fmtAgeShort(ev.tokenAgeMin)}` : null,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+
+  const header =
+    conv >= 70
+      ? "🔥 <b>SMART-MONEY BUY</b>  ·  ⚡️ High conviction"
+      : "🔥 <b>SMART-MONEY BUY</b>";
   const lines = [
-    `🏆 <b>Top signal</b> · conviction ${conv}/100`,
-    escHtml(text),
-    ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
+    header,
+    "",
+    `🐳 A whale just aped <b>${amount}</b> into <b>${tok}</b>`,
+    metrics || null,
+    quality?.observed && quality.winRate > 0
+      ? `🎯 <b>${quality.winRate}%</b> win-rate wallet`
+      : null,
+    ev.risk?.verdict === "ok" ? "🛡 Anti-rug: passed" : null,
+    "",
     socialLinks(ev.tokenMint, ev.socials),
-  ].filter(Boolean) as string[];
+    ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
+  ].filter((l) => l !== null) as string[];
   await postToChannel(lines.join("\n"));
 }
 
@@ -204,7 +240,7 @@ async function runDispatch(): Promise<DispatchResult> {
     // Mirror the premium pick to the Telegram signals channel (richer there:
     // the bare tweet + chart/socials + mint). Fail-soft — never blocks the tweet.
     if (cfg.mirrorTelegram) {
-      await mirrorToTelegram(text, best.ev, best.conv).catch((e) =>
+      await mirrorToTelegram(best.ev, best.q, best.conv).catch((e) =>
         console.error("[tweet] tg mirror failed:", e),
       );
     }

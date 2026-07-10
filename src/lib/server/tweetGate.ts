@@ -256,11 +256,15 @@ export function hardGate(
       return { ok: false, reason: "low-liq" };
   }
 
-  if (ev.marketCapUsd == null) return { ok: false, reason: "no-mcap" };
-  if (cfg.minMcap > 0 && ev.marketCapUsd < cfg.minMcap)
-    return { ok: false, reason: "mcap-too-low" };
-  if (cfg.maxMcap > 0 && ev.marketCapUsd > cfg.maxMcap)
-    return { ok: false, reason: "mcap-too-high" };
+  // Only require/gate market cap when a bound is actually configured. With both
+  // bounds off (0), a missing mcap shouldn't hard-block a buy.
+  if (cfg.minMcap > 0 || cfg.maxMcap > 0) {
+    if (ev.marketCapUsd == null) return { ok: false, reason: "no-mcap" };
+    if (cfg.minMcap > 0 && ev.marketCapUsd < cfg.minMcap)
+      return { ok: false, reason: "mcap-too-low" };
+    if (cfg.maxMcap > 0 && ev.marketCapUsd > cfg.maxMcap)
+      return { ok: false, reason: "mcap-too-high" };
+  }
 
   // Age band applies only when age is known (liquidity + mcap + anti-rug already
   // screen out fresh rugs, so a missing pair-age shouldn't hard-block a buy).

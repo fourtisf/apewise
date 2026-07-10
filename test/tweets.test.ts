@@ -142,6 +142,9 @@ test("hardGate: anti-rug — risk always blocked, caution/unknown blocked in str
 test("hardGate: market-cap band + freshness", () => {
   assert.equal(hardGate(ev({ marketCapUsd: 50000 }), quality(), cfg()).reason, "mcap-too-low");
   assert.equal(hardGate(ev({ marketCapUsd: 9e8 }), quality(), cfg()).reason, "mcap-too-high");
+  // mcap not required when both bounds are off (0)
+  assert.equal(hardGate(ev({ marketCapUsd: undefined }), quality(), cfg({ minMcap: 0, maxMcap: 0 })).ok, true);
+  assert.equal(hardGate(ev({ marketCapUsd: undefined }), quality(), cfg()).reason, "no-mcap");
   assert.equal(hardGate(ev({ tokenAgeMin: 5 }), quality(), cfg()).reason, "too-new");
   // unknown age does not hard-block (liquidity+mcap+antirug already screen rugs)
   assert.equal(hardGate(ev({ tokenAgeMin: undefined }), quality(), cfg()).ok, true);

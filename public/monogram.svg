@@ -1,18 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" role="img" aria-label="ApeWise">
   <defs>
-    <linearGradient id="b" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#5cffc4"/>
       <stop offset="1" stop-color="#11bf86"/>
     </linearGradient>
     <filter id="g" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="0.85" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
   <rect x="0" y="0" width="32" height="32" rx="9" fill="#000000"/>
   <g filter="url(#g)">
-    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="url(#b)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M9.4 13.8 13.4 13.8" stroke="url(#b)" stroke-width="2.4" stroke-linecap="round"/>
-    <circle cx="26" cy="8" r="2.6" fill="url(#b)"/>
+    <path d="M16,13.4 C14.2,11.6 11.4,9 5.6,7.2 C9,10.6 12.4,13.8 14.8,17.6 C15.3,20.2 15.7,22.6 16,24.8 C16.3,22.6 16.7,20.2 17.2,17.6 C19.6,13.8 23,10.6 26.4,7.2 C20.6,9 17.8,11.6 16,13.4 Z" fill="url(#b)"/>
   </g>
 </svg>

@@ -1,12 +1,10 @@
 import { cn } from "@/lib/cn";
 
 /**
- * ApeWise monogram — an "AW" ligature drawn as a rising smart-money chart:
- * the **A** (peak + crossbar) flows straight into a **W** zig-zag and resolves
- * on the signal dot. Premium emerald (a `--brand-hi → --brand-lo` gradient, lit
- * from the top) on a pure-black, borderless tile with a soft emerald glow.
- * Tokens keep it themeable; the gradient is defined in the mark's own 0–32 space
- * so every instance renders correctly.
+ * ApeWise mark — a diving whale tail (fluke) in premium emerald
+ * (`--brand-hi → --brand-lo`, lit from the top) on a pure-black, borderless tile
+ * with a soft emerald glow. Iconic for a whale-money tracker and legible down to
+ * favicon sizes; themeable via brand tokens. Path is baked into 0–32 space.
  */
 export function ApeWiseMonogram({ className }: { className?: string }) {
   return (
@@ -18,14 +16,7 @@ export function ApeWiseMonogram({ className }: { className?: string }) {
       aria-label="ApeWise"
     >
       <defs>
-        <linearGradient
-          id="apewise-brand"
-          x1="0"
-          y1="7"
-          x2="0"
-          y2="24"
-          gradientUnits="userSpaceOnUse"
-        >
+        <linearGradient id="apewise-brand" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="var(--brand-hi)" />
           <stop offset="1" stopColor="var(--brand-lo)" />
         </linearGradient>
@@ -48,23 +39,11 @@ export function ApeWiseMonogram({ className }: { className?: string }) {
       {/* pure-black, borderless tile */}
       <rect x="0" y="0" width="32" height="32" rx="9" fill="#000000" />
       <g filter="url(#apewise-glow)">
-        {/* A → W rising ligature */}
+        {/* whale-tail (fluke) mark */}
         <path
-          d="M6 23.4 L11 9.2 L15 16.8 L19 11.4 L22.2 15.4 L26 8"
-          stroke="url(#apewise-brand)"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          d="M16,13.4 C14.2,11.6 11.4,9 5.6,7.2 C9,10.6 12.4,13.8 14.8,17.6 C15.3,20.2 15.7,22.6 16,24.8 C16.3,22.6 16.7,20.2 17.2,17.6 C19.6,13.8 23,10.6 26.4,7.2 C20.6,9 17.8,11.6 16,13.4 Z"
+          fill="url(#apewise-brand)"
         />
-        {/* crossbar of the A */}
-        <path
-          d="M9.4 13.8 L13.4 13.8"
-          stroke="url(#apewise-brand)"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-        />
-        {/* smart-money signal dot */}
-        <circle cx="26" cy="8" r="2.6" fill="url(#apewise-brand)" />
       </g>
     </svg>
   );

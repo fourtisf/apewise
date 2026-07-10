@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" width="1500" height="500">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" width="1500" height="500" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#05090C"/><stop offset="60%" stop-color="#070F0C"/><stop offset="100%" stop-color="#04120C"/>
+      <stop offset="0%" stop-color="#05090C"/><stop offset="58%" stop-color="#070F0C"/><stop offset="100%" stop-color="#051510"/>
     </linearGradient>
     <linearGradient id="em" x1="0" y1="-1" x2="0" y2="1">
       <stop offset="0%" stop-color="#8CF7CF"/><stop offset="55%" stop-color="#22D69A"/><stop offset="100%" stop-color="#0BAE79"/>
@@ -10,32 +10,35 @@
       <stop offset="0%" stop-color="#6BF3BE"/><stop offset="100%" stop-color="#0BAE79"/>
     </linearGradient>
     <radialGradient id="aura" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#12C98C" stop-opacity="0.42"/><stop offset="100%" stop-color="#12C98C" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#12C98C" stop-opacity="0.40"/><stop offset="100%" stop-color="#12C98C" stop-opacity="0"/>
     </radialGradient>
-    <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
-      <path d="M46 0H0V46" fill="none" stroke="#1BE39C" stroke-width="1" opacity="0.05"/>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#1BE39C" stroke-width="1" opacity="0.045"/>
     </pattern>
     <filter id="glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
 
   <rect width="1500" height="500" fill="url(#bg)"/>
   <rect width="1500" height="500" fill="url(#grid)"/>
-  <ellipse cx="1235" cy="250" rx="430" ry="360" fill="url(#aura)"/>
-  <path d="M60 400 L300 360 L470 388 L640 300 L820 336 L1000 210 L1160 250 L1440 96" fill="none" stroke="#1BE39C" stroke-width="3" opacity="0.14"/>
+  <ellipse cx="1245" cy="250" rx="410" ry="340" fill="url(#aura)"/>
+  <path d="M40 405 L300 368 L470 392 L660 300 L840 338 L1010 214 L1180 252 L1470 92" fill="none" stroke="#1BE39C" stroke-width="3" opacity="0.13"/>
 
   <!-- whale fluke mark (right) -->
-  <g transform="translate(1235,246) scale(1.55)" filter="url(#glow)">
+  <g transform="translate(1248,244) scale(1.6)" filter="url(#glow)">
     <path d="M0,-34 C-18,-52 -46,-78 -104,-96 C-70,-62 -36,-30 -12,8 C-7,34 -3,58 0,80 C3,58 7,34 12,8 C36,-30 70,-62 104,-96 C46,-78 18,-52 0,-34 Z" fill="url(#em)"/>
   </g>
 
-  <text x="86" y="230" font-size="128" font-weight="bold" letter-spacing="1" fill="#EAF3EE"><tspan fill="url(#emW)">APE</tspan>WISE</text>
-  <text x="92" y="290" font-size="35" font-weight="bold" fill="#9FB6AC" letter-spacing="0.5">Smart-money &amp; whale alpha on Solana</text>
+  <!-- left column, tidy rhythm -->
+  <text x="90" y="196" font-size="116" font-weight="bold" letter-spacing="1" fill="#EAF3EE"><tspan fill="url(#emW)">APE</tspan>WISE</text>
+  <text x="94" y="252" font-size="33" font-weight="bold" fill="#A6BCB2" letter-spacing="0.4">Smart-money &amp; whale alpha on Solana</text>
 
-  <g transform="translate(600,352)" font-size="24" font-weight="bold" fill="#12C98C">
-    <circle cx="8" cy="-8" r="6"/><text x="24" y="0" fill="#BFE9D8">Whale tracker</text>
-    <circle cx="228" cy="-8" r="6"/><text x="244" y="0" fill="#BFE9D8">High-win-rate wallets</text>
-    <circle cx="560" cy="-8" r="6"/><text x="576" y="0" fill="#BFE9D8">24/7 autonomous</text>
+  <rect x="95" y="286" width="452" height="2.5" rx="1" fill="#12C98C" opacity="0.42"/>
+
+  <g font-size="23" font-weight="bold" transform="translate(95,332)">
+    <circle cx="7" cy="-7" r="5.5" fill="#12C98C"/><text x="22" y="0" fill="#C6EBDB">Whale tracker</text>
+    <circle cx="216" cy="-7" r="5.5" fill="#12C98C"/><text x="231" y="0" fill="#C6EBDB">High-win-rate wallets</text>
+    <circle cx="536" cy="-7" r="5.5" fill="#12C98C"/><text x="551" y="0" fill="#C6EBDB">24/7 autonomous</text>
   </g>
-  <text x="600" y="430" font-size="27" font-weight="bold" fill="#12C98C" letter-spacing="1">@apewiseai</text>
-  <text x="600" y="466" font-size="21" fill="#6E8880" letter-spacing="1.5">SOLANA · BSC · BASE · ETHEREUM · TRON</text>
+
+  <text x="95" y="392" font-size="26" font-weight="bold" fill="#12C98C" letter-spacing="0.8">@apewiseai<tspan fill="#5E7871" font-size="21" letter-spacing="1.5" dx="22">SOLANA · BSC · BASE · ETH · TRON</tspan></text>
 </svg>

@@ -1,27 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500" fill="none">
-  <!-- ApeWise — X header (1500x500). Avatar overlaps bottom-left; key content kept clear of it. -->
-  <defs><linearGradient id="brand" x1="0" y1="7" x2="0" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5cffc4"/><stop offset="1" stop-color="#11bf86"/></linearGradient><filter id="gM" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="0.7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.16"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></radialGradient>
-    <radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.09"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></radialGradient>
-    <radialGradient id="gridmask" cx="50%" cy="40%" r="62%"><stop offset="0" stop-color="#fff"/><stop offset="0.7" stop-color="#fff" stop-opacity="0.35"/><stop offset="1" stop-color="#000"/></radialGradient>
-    <mask id="gm"><rect width="1500" height="500" fill="url(#gridmask)"/></mask>
-    <linearGradient id="cf" x1="0" y1="140" x2="0" y2="430" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2fe9a8" stop-opacity="0.20"/><stop offset="1" stop-color="#2fe9a8" stop-opacity="0"/></linearGradient>
-    <linearGradient id="cs" x1="640" y1="358" x2="1410" y2="140" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#11bf86"/><stop offset="1" stop-color="#7dffce"/></linearGradient>
-    <filter id="cg" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" width="1500" height="500" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#05090C"/><stop offset="58%" stop-color="#070F0C"/><stop offset="100%" stop-color="#051510"/>
+    </linearGradient>
+    <linearGradient id="em" x1="0" y1="-1" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8CF7CF"/><stop offset="55%" stop-color="#22D69A"/><stop offset="100%" stop-color="#0BAE79"/>
+    </linearGradient>
+    <linearGradient id="emW" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6BF3BE"/><stop offset="100%" stop-color="#0BAE79"/>
+    </linearGradient>
+    <radialGradient id="aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#12C98C" stop-opacity="0.40"/><stop offset="100%" stop-color="#12C98C" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#1BE39C" stroke-width="1" opacity="0.045"/>
+    </pattern>
+    <filter id="glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
-  <rect width="1500" height="500" fill="#000000"/>
-  <ellipse cx="1230" cy="120" rx="430" ry="360" fill="url(#g1)"/>
-  <ellipse cx="250" cy="250" rx="380" ry="320" fill="url(#g2)"/>
-  <g stroke="#ffffff" stroke-opacity="0.05" stroke-width="1" mask="url(#gm)"><line x1="100" y1="0" x2="100" y2="500"/><line x1="200" y1="0" x2="200" y2="500"/><line x1="300" y1="0" x2="300" y2="500"/><line x1="400" y1="0" x2="400" y2="500"/><line x1="500" y1="0" x2="500" y2="500"/><line x1="600" y1="0" x2="600" y2="500"/><line x1="700" y1="0" x2="700" y2="500"/><line x1="800" y1="0" x2="800" y2="500"/><line x1="900" y1="0" x2="900" y2="500"/><line x1="1000" y1="0" x2="1000" y2="500"/><line x1="1100" y1="0" x2="1100" y2="500"/><line x1="1200" y1="0" x2="1200" y2="500"/><line x1="1300" y1="0" x2="1300" y2="500"/><line x1="1400" y1="0" x2="1400" y2="500"/><line x1="0" y1="100" x2="1500" y2="100"/><line x1="0" y1="200" x2="1500" y2="200"/><line x1="0" y1="300" x2="1500" y2="300"/><line x1="0" y1="400" x2="1500" y2="400"/></g>
-  <path d="M640 358 L726 320 L802 344 L898 276 L986 300 L1082 228 L1178 252 L1276 176 L1410 140 L1410 430 L640 430 Z" fill="url(#cf)"/>
-  <g filter="url(#cg)"><path d="M640 358 L726 320 L802 344 L898 276 L986 300 L1082 228 L1178 252 L1276 176 L1410 140" fill="none" stroke="url(#cs)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="1410" cy="140" r="8.5" fill="#9affd9"/></g>
-  <circle cx="1410" cy="140" r="17" fill="none" stroke="#2fe9a8" stroke-opacity="0.45" stroke-width="2"/>
-  <text x="98" y="124" font-family="Inter" font-weight="500" font-size="21" letter-spacing="6" fill="#8a8a90">SMART-MONEY TRACKER · SOLANA</text>
-  <g transform="translate(96 150) scale(3.25)"><g filter="url(#gM)">
-    <path d="M6 23.4 11 9.2 15 16.8 19 11.4 22.2 15.4 26 8" fill="none" stroke="url(#brand)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M9.4 13.8 13.4 13.8" stroke="url(#brand)" stroke-width="2.4" stroke-linecap="round"/>
-    <circle cx="26" cy="8" r="2.6" fill="url(#brand)"/></g></g>
-  <text x="232" y="234" font-family="Space Grotesk" font-weight="700" font-size="90" letter-spacing="-2" fill="#f4f4f6">ApeWise</text>
-  <text x="100" y="300" font-family="Space Grotesk" font-weight="500" font-size="33" letter-spacing="-0.3" fill="#cfd0d4">Follow the smartest money on <tspan fill="#2fe9a8">Solana.</tspan></text>
-  <text x="1404" y="462" text-anchor="end" font-family="Inter" font-weight="500" font-size="21" fill="#6b7178">apewise.ai · powered by Fourtis</text>
+
+  <rect width="1500" height="500" fill="url(#bg)"/>
+  <rect width="1500" height="500" fill="url(#grid)"/>
+  <ellipse cx="1245" cy="250" rx="410" ry="340" fill="url(#aura)"/>
+  <path d="M40 405 L300 368 L470 392 L660 300 L840 338 L1010 214 L1180 252 L1470 92" fill="none" stroke="#1BE39C" stroke-width="3" opacity="0.13"/>
+
+  <!-- whale fluke mark (right) -->
+  <g transform="translate(1248,244) scale(1.6)" filter="url(#glow)">
+    <path d="M0,-34 C-18,-52 -46,-78 -104,-96 C-70,-62 -36,-30 -12,8 C-7,34 -3,58 0,80 C3,58 7,34 12,8 C36,-30 70,-62 104,-96 C46,-78 18,-52 0,-34 Z" fill="url(#em)"/>
+  </g>
+
+  <!-- left column, tidy rhythm -->
+  <text x="90" y="196" font-size="116" font-weight="bold" letter-spacing="1" fill="#EAF3EE"><tspan fill="url(#emW)">APE</tspan>WISE</text>
+  <text x="94" y="252" font-size="33" font-weight="bold" fill="#A6BCB2" letter-spacing="0.4">Smart-money &amp; whale alpha on Solana</text>
+
+  <rect x="95" y="286" width="452" height="2.5" rx="1" fill="#12C98C" opacity="0.42"/>
+
+  <g font-size="23" font-weight="bold" transform="translate(95,332)">
+    <circle cx="7" cy="-7" r="5.5" fill="#12C98C"/><text x="22" y="0" fill="#C6EBDB">Whale tracker</text>
+    <circle cx="216" cy="-7" r="5.5" fill="#12C98C"/><text x="231" y="0" fill="#C6EBDB">High-win-rate wallets</text>
+    <circle cx="536" cy="-7" r="5.5" fill="#12C98C"/><text x="551" y="0" fill="#C6EBDB">24/7 autonomous</text>
+  </g>
+
+  <text x="95" y="392" font-size="26" font-weight="bold" fill="#12C98C" letter-spacing="0.8">@apewiseai<tspan fill="#5E7871" font-size="21" letter-spacing="1.5" dx="22">SOLANA · BSC · BASE · ETH · TRON</tspan></text>
 </svg>

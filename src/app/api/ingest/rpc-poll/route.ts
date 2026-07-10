@@ -7,6 +7,7 @@ import {
 import { addEvents } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
+import { enqueueForTweet } from "@/lib/server/tweets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +61,12 @@ export async function GET(req: Request) {
   await Promise.allSettled(parsed.map((e) => enrichEvent(e)));
   const fresh = await addEvents(parsed);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
+  // Same as the Helius path: queue qualifying buys for the auto-tweet channel.
+  try {
+    enqueueForTweet(fresh);
+  } catch (e) {
+    console.error("[rpc-poll] enqueueForTweet failed:", e);
+  }
 
   return NextResponse.json({ ok: true, found: parsed.length, ingested: fresh.length });
 }

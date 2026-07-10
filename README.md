@@ -189,3 +189,54 @@ curl -s http://localhost:3000/api/terminal/feed | head   # -> "live":true with t
 > **Scope:** wallets are operator-curated (segments assigned per wallet). Automated
 > PnL/win-rate **scoring**, anti-rug fusion and payments are the next milestones —
 > see `// TODO`s in `src/lib/server/`.
+
+---
+
+## Auto-tweet channel (X / Twitter) — Moby-style, but strict
+
+An optional **auto-poster** that tweets smart-money buys in the style of *Whale
+Watch by Moby* (`🐳 A smart-money whale just bought $25K of $PEPE at $2M MC`), but
+built to **under-post**. Over-tweeting low-signal noise tanks reach, so it only
+ever emits the **single highest-conviction buy per tick**, and only from
+**high-win-rate wallets** that clear a strict gate.
+
+**Design — detection and posting are decoupled** so bursty on-chain activity can
+never become bursty tweets:
+
+```
+Helius webhook → parse → enrich → store → enqueueForTweet()  ┐  (fast pre-filter)
+                                                             ▼
+tweet worker → GET /api/tweets/dispatch → dispatchTweets()   →  post ≤ 1 tweet
+   • global pacing: min spacing + rolling per-hour / per-day caps
+   • per-token & per-wallet+token cooldowns
+   • strict per-event gate + high-win-rate wallet gate
+   • conviction score → tweet only the best candidate in the pool
+```
+
+Every gate lives in `src/lib/server/tweets.ts`; the X API v2 client (OAuth 1.0a,
+zero-dep) is in `src/lib/server/twitter.ts`. Rate-limit state persists to
+`data/tweets.jsonl`, so a restart can't cause a post burst.
+
+**The gate (all must pass):** buy only · size `≥ TWEET_MIN_USD` · anti-rug `ok`
+(a known rug is always blocked) · liquidity / market-cap band · min token age ·
+allowed segment (`smart,insider` by default) · **observed win-rate
+`≥ TWEET_MIN_WIN_RATE`** (with a min number of closed round-trips) · conviction
+`≥ TWEET_MIN_CONVICTION`. Then the global limiter (`TWEET_MIN_SPACING_SEC`,
+`TWEET_MAX_PER_HOUR`, `TWEET_MAX_PER_DAY`) and cooldowns decide whether *this
+tick* posts at all. See `.env.example` for every knob.
+
+**Setup (on the server):**
+
+1. Create X API keys (developer.x.com → app → **Read and Write**, then regenerate
+   the Access Token so it inherits write) and set `TWITTER_API_KEY`,
+   `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`. With the
+   keys blank the channel stays in **dry-run** (composes + logs, never posts).
+2. Run the worker alongside the app:
+   ```bash
+   pm2 start scripts/tweet-worker.mjs --name apewise-tweets && pm2 save
+   ```
+3. Tune strictness in `.env` (all `TWEET_*` vars) and `pm2 restart apewise`.
+
+> The tweet gate is intentionally **much stricter** than the Telegram alert gate —
+> Telegram is a firehose for subscribers; the public timeline is curated so the
+> account reads as high-signal, which is what keeps its reach healthy.

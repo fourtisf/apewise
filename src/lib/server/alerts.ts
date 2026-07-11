@@ -81,6 +81,58 @@ function hashIdx(s: string, n: number): number {
   return n > 0 ? h % n : 0;
 }
 
+// Distinct Telegram HEADLINE styles — like the X copy styles, but for the
+// channel. The whole framing/structure changes between them (not just the verb),
+// and one is chosen per event by the stateless hash so consecutive alerts read
+// varied. Each stays clean, one line, and scale-aware. Set ALERT_STYLES (comma
+// list of indices, e.g. "0,1,4") to restrict the rotation.
+interface AlertParts {
+  isBuy: boolean;
+  emoji: string; // scale/action emoji (🐳 / 🟢 / 🔴)
+  who: string; // "Whale" | "Smart money"
+  verb: string; // bought / grabbed / sold / ...
+  amount: string; // "$1.2K"
+  tok: string; // "$PEPE"
+  mc: string; // "$2M" or ""
+}
+const ALERT_STYLES: ((p: AlertParts) => string)[] = [
+  // 0 · classic
+  (p) =>
+    `${p.emoji} <b>${p.who} ${p.verb} ${p.amount}</b> of <b>${p.tok}</b>${p.mc ? ` at ${p.mc} MC` : ""}`,
+  // 1 · ticker-first
+  (p) =>
+    `${p.emoji} <b>${p.tok}</b> · ${p.who} ${p.verb} <b>${p.amount}</b>${p.mc ? ` · ${p.mc} MC` : ""}`,
+  // 2 · alert
+  (p) =>
+    `🚨 <b>${p.isBuy ? "BUY" : "SELL"} ALERT</b> — <b>${p.amount}</b> ${p.isBuy ? "into" : "out of"} <b>${p.tok}</b>${p.mc ? ` (${p.mc} MC)` : ""}`,
+  // 3 · flow
+  (p) =>
+    `📊 <b>${p.isBuy ? "Inflow" : "Outflow"}</b> → <b>${p.tok}</b>: ${p.who} ${p.amount}${p.mc ? ` · ${p.mc} MC` : ""}`,
+  // 4 · punchy
+  (p) =>
+    `${p.emoji} <b>${p.tok}</b> — ${p.who.toLowerCase()} just ${p.verb} <b>${p.amount}</b>${p.mc ? ` (${p.mc} MC)` : ""}`,
+  // 5 · minimal
+  (p) =>
+    `${p.emoji} <b>${p.tok}</b> · ${p.amount} ${p.isBuy ? "buy" : "sell"}${p.mc ? ` · ${p.mc} MC` : ""}`,
+  // 6 · hype (buy) / trim (sell)
+  (p) =>
+    p.isBuy
+      ? `🔥 <b>Smart money is loading ${p.tok}</b> — ${p.amount} buy${p.mc ? ` at ${p.mc} MC` : ""}`
+      : `📤 <b>Smart money is trimming ${p.tok}</b> — ${p.amount} sell${p.mc ? ` at ${p.mc} MC` : ""}`,
+];
+
+/** Enabled headline styles from ALERT_STYLES (comma indices); default all. */
+function enabledAlertStyles(): ((p: AlertParts) => string)[] {
+  const raw = process.env.ALERT_STYLES;
+  if (!raw) return ALERT_STYLES;
+  const picked = raw
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < ALERT_STYLES.length)
+    .map((i) => ALERT_STYLES[i]);
+  return picked.length ? picked : ALERT_STYLES;
+}
+
 /** Compact anti-rug tag for the metrics line. */
 function antirugTag(ev: SmartEvent): string | null {
   const r = ev.risk;
@@ -176,14 +228,23 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
       ? ` <i>(${ev.label})</i>`
       : "";
 
-  // Clean, Moby-style headline: "{who} {verb} {amount} of {$TOKEN} at {mcap} MC".
-  // Scale-aware ("Whale" only when big), light verb variety, one line.
+  // Headline: pick one of several distinct styles per event (stateless hash) so
+  // the channel reads varied like the X feed. Scale-aware + light verb variety.
   const seed = `${ev.wallet}:${ev.tokenMint || ev.token}:${ev.action}`;
   const who = descriptor(ev.amountUsd);
   const verbs = isBuy ? BUY_VERB : SELL_VERB;
-  const verb = verbs[hashIdx(seed, verbs.length)];
   const emoji = isBuy ? (who === "Whale" ? "🐳" : "🟢") : "🔴";
-  const mc = ev.marketCapUsd != null ? ` at ${fmtUsd(ev.marketCapUsd)} MC` : "";
+  const parts: AlertParts = {
+    isBuy,
+    emoji,
+    who,
+    verb: verbs[hashIdx(seed + "#v", verbs.length)],
+    amount: amount ?? "",
+    tok: `$${ev.token}`,
+    mc: ev.marketCapUsd != null ? (fmtUsd(ev.marketCapUsd) ?? "") : "",
+  };
+  const styles = enabledAlertStyles();
+  const headline = styles[hashIdx(seed, styles.length)](parts);
   const wallet = `<a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a>`;
 
   // Compact metrics: liquidity · age · anti-rug (mcap already in the headline).
@@ -194,7 +255,7 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
   ].filter(Boolean);
 
   const lines = [
-    `${emoji} <b>${who} ${verb} ${amount}</b> of <b>$${ev.token}</b>${mc}`,
+    headline,
     `${wallet}${label}`,
     meta.length ? meta.join("  ·  ") : null,
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,

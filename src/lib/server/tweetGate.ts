@@ -120,25 +120,33 @@ export function loadConfig(): TweetConfig {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
+  // "Moby mode": one switch that flips every default to a high-frequency, loose
+  // gate (like Whale Watch by Moby — post nearly every $1k+ tracked-wallet buy,
+  // no mcap cap, up to ~1/min). Any individual TWEET_* env var still overrides,
+  // so you can start from Moby mode and tighten one knob. Off = the strict,
+  // quiet defaults (protect reach). Set TWEET_MOBY_MODE=true to enable.
+  const moby = bool("TWEET_MOBY_MODE", false);
   return {
-    minUsd: num("TWEET_MIN_USD", 5000),
-    minLiquidityUsd: num("TWEET_MIN_LIQUIDITY_USD", 20000),
-    minMcap: num("TWEET_MIN_MCAP", 100000),
-    maxMcap: num("TWEET_MAX_MCAP", 50_000_000),
-    minTokenAgeMin: num("TWEET_MIN_TOKEN_AGE_MIN", 30),
+    minUsd: num("TWEET_MIN_USD", moby ? 1000 : 5000),
+    minLiquidityUsd: num("TWEET_MIN_LIQUIDITY_USD", moby ? 5000 : 20000),
+    minMcap: num("TWEET_MIN_MCAP", moby ? 0 : 100000),
+    // No upper mcap cap in Moby mode — the strict 50M cap was blocking large-cap
+    // tokens (e.g. a $414M-MC buy) that Moby happily posts.
+    maxMcap: num("TWEET_MAX_MCAP", moby ? 0 : 50_000_000),
+    minTokenAgeMin: num("TWEET_MIN_TOKEN_AGE_MIN", moby ? 5 : 30),
     maxTokenAgeMin: num("TWEET_MAX_TOKEN_AGE_MIN", 0),
-    requireAntirugOk: bool("TWEET_REQUIRE_ANTIRUG_OK", true),
-    minWinRate: num("TWEET_MIN_WIN_RATE", 60),
+    requireAntirugOk: bool("TWEET_REQUIRE_ANTIRUG_OK", moby ? false : true),
+    minWinRate: num("TWEET_MIN_WIN_RATE", moby ? 0 : 60),
     minClosedTrades: num("TWEET_MIN_CLOSED_TRADES", 4),
     strictWinRate: bool("TWEET_STRICT_WINRATE", false),
     allowedSegments: segs.length ? segs : ["smart", "insider"],
-    minConviction: num("TWEET_MIN_CONVICTION", 55),
+    minConviction: num("TWEET_MIN_CONVICTION", moby ? 0 : 55),
     candidateTtlMin: num("TWEET_CANDIDATE_TTL_MIN", 20),
-    minSpacingSec: num("TWEET_MIN_SPACING_SEC", 900),
-    maxPerHour: num("TWEET_MAX_PER_HOUR", 4),
-    maxPerDay: num("TWEET_MAX_PER_DAY", 24),
-    pairCooldownMin: num("TWEET_PAIR_COOLDOWN_MIN", 1440),
-    tokenCooldownMin: num("TWEET_TOKEN_COOLDOWN_MIN", 1440),
+    minSpacingSec: num("TWEET_MIN_SPACING_SEC", moby ? 60 : 900),
+    maxPerHour: num("TWEET_MAX_PER_HOUR", moby ? 30 : 4),
+    maxPerDay: num("TWEET_MAX_PER_DAY", moby ? 400 : 24),
+    pairCooldownMin: num("TWEET_PAIR_COOLDOWN_MIN", moby ? 120 : 1440),
+    tokenCooldownMin: num("TWEET_TOKEN_COOLDOWN_MIN", moby ? 60 : 1440),
     styles: parseStyles(),
     whaleTag: process.env.TWEET_WHALE_TAG || "smart-money whale",
     showWinRate: bool("TWEET_SHOW_WINRATE", true),

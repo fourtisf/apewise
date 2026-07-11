@@ -50,44 +50,44 @@ export async function postToChannel(
 export function fmtUsd(n?: number): string | null {
   if (n == null || !Number.isFinite(n)) return null;
   const a = Math.abs(n);
-  if (a >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (a >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  // Trim trailing zeros so it reads $2M / $414M, not $2.00M / $414.00M.
+  const u = (v: number, s: string) =>
+    `$${v.toFixed(2).replace(/\.?0+$/, "")}${s}`;
+  if (a >= 1e12) return u(n / 1e12, "T");
+  if (a >= 1e9) return u(n / 1e9, "B");
+  if (a >= 1_000_000) return u(n / 1_000_000, "M");
   if (a >= 1000) return `$${(n / 1000).toFixed(a >= 10_000 ? 0 : 1)}k`;
   return `$${Math.round(n)}`;
 }
 
-const SEG_LABEL: Record<SmartEvent["segment"], string> = {
-  smart: "Smart",
-  sniper: "Sniper",
-  insider: "Insider",
-  kol: "KOL",
-};
+// Light verb variety so the channel doesn't read as one repeated template,
+// picked by a stateless hash of the event so it's stable per event and survives
+// restarts. The framing stays clean + Moby-like (one headline sentence); the
+// "whale vs smart money" descriptor is SCALE-AWARE so a tiny $25 trade is never
+// announced as a "whale".
+const BUY_VERB = ["bought", "grabbed", "scooped", "loaded up", "aped"];
+const SELL_VERB = ["sold", "offloaded", "trimmed", "exited", "dumped"];
 
-// Rotating copy so the channel doesn't read as one repeated template. The
-// variant is chosen by a stateless hash of the event (wallet+mint+action), so
-// different events look different, the SAME event is stable, and it survives
-// restarts (no in-memory counter that resets to variant 0).
-const BUY_HEAD: ((t: string) => string)[] = [
-  (t) => `🟢 <b>SMART BUY</b> · <b>${t}</b>`,
-  (t) => `🐳 <b>WHALE ACCUMULATING</b> · <b>${t}</b>`,
-  (t) => `🚀 <b>SMART MONEY IN</b> · <b>${t}</b>`,
-  (t) => `💰 <b>FRESH BUY</b> · <b>${t}</b>`,
-  (t) => `📈 <b>SMART-MONEY BUY</b> · <b>${t}</b>`,
-];
-const SELL_HEAD: ((t: string) => string)[] = [
-  (t) => `🔴 <b>SMART SELL</b> · <b>${t}</b>`,
-  (t) => `📤 <b>WHALE EXIT</b> · <b>${t}</b>`,
-  (t) => `⚠️ <b>TAKING PROFIT</b> · <b>${t}</b>`,
-];
-const BUY_VERB = ["aped", "grabbed", "loaded up", "scooped", "bought"];
-const SELL_VERB = ["dumped", "offloaded", "sold", "exited"];
+/** "Whale" only when the trade is actually big; else "Smart money". */
+function descriptor(amountUsd: number): string {
+  const whale = Number(process.env.ALERT_WHALE_USD) || 25000;
+  return amountUsd >= whale ? "Whale" : "Smart money";
+}
 
 /** Stateless string→[0,n) hash (djb2). Same input → same index, always. */
 function hashIdx(s: string, n: number): number {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return n > 0 ? h % n : 0;
+}
+
+/** Compact anti-rug tag for the metrics line. */
+function antirugTag(ev: SmartEvent): string | null {
+  const r = ev.risk;
+  if (!r || r.verdict === "unknown") return null;
+  if (r.verdict === "ok") return "🛡 safe";
+  if (r.verdict === "caution") return "⚠️ caution";
+  return "⛔ risky";
 }
 
 function fmtAge(min?: number): string | null {
@@ -97,15 +97,6 @@ function fmtAge(min?: number): string | null {
   const days = min / 1440;
   if (days < 365) return `${Math.round(days)}d`;
   return `${(days / 365).toFixed(1)}y`;
-}
-
-function riskLine(ev: SmartEvent): string | null {
-  const r = ev.risk;
-  if (!r || r.verdict === "unknown") return null;
-  if (r.verdict === "ok") return "🛡 Anti-rug: passed";
-  const reasons = r.reasons.slice(0, 2).join(" · ") || "checks flagged";
-  if (r.verdict === "caution") return `⚠️ Caution · ${reasons}`;
-  return `⛔ High risk · ${reasons}`;
 }
 
 /**
@@ -127,30 +118,42 @@ export function socialLinks(
   return parts.length ? parts.join("  ·  ") : null;
 }
 
-// Per wallet+token cooldown (anti-spam).
-const lastAlertAt = new Map<string, number>();
+const lastAlertAt = new Map<string, number>(); // per wallet+token
+const lastWalletAt = new Map<string, number>(); // per wallet (any token)
 const COOLDOWN = (Number(process.env.ALERT_COOLDOWN_SEC) || 60) * 1000;
-// Floor on alert size so dust/test swaps (e.g. a $396 buy) never spam the
-// channel. Sells are exit signal at any size, so the floor is buy-only.
+// Per-wallet cooldown: one wallet dumping several tokens in one cycle should not
+// post a wall of near-identical alerts (reads as "double"). 0 disables.
+const WALLET_COOLDOWN =
+  (process.env.ALERT_WALLET_COOLDOWN_SEC == null
+    ? 90
+    : Number(process.env.ALERT_WALLET_COOLDOWN_SEC)) * 1000;
+// Floor on alert size — applies to BUYS AND SELLS so dust swaps (a $25 sell)
+// never spam the channel. This is what makes it read as a signal, not a feed.
 const MIN_USD = Number(process.env.ALERT_MIN_USD) || 1000;
 
 function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (ev.risk?.verdict === "risk" && process.env.ALERT_ON_RISK !== "true") {
     return { ok: false, reason: "risk-suppressed" };
   }
-  if (
-    ev.action === "buy" &&
-    MIN_USD > 0 &&
-    (ev.amountUsd == null || ev.amountUsd < MIN_USD)
-  ) {
+  if (process.env.ALERT_BUYS_ONLY === "true" && ev.action !== "buy") {
+    return { ok: false, reason: "sells-off" };
+  }
+  if (MIN_USD > 0 && (ev.amountUsd == null || ev.amountUsd < MIN_USD)) {
     return { ok: false, reason: "below-min-usd" };
   }
-  const key = `${ev.wallet}:${ev.tokenMint || ev.token}`;
   const now = Date.now();
+  if (
+    WALLET_COOLDOWN > 0 &&
+    now - (lastWalletAt.get(ev.wallet) || 0) < WALLET_COOLDOWN
+  ) {
+    return { ok: false, reason: "wallet-cooldown" };
+  }
+  const key = `${ev.wallet}:${ev.tokenMint || ev.token}`;
   if (now - (lastAlertAt.get(key) || 0) < COOLDOWN) {
     return { ok: false, reason: "cooldown" };
   }
   lastAlertAt.set(key, now);
+  lastWalletAt.set(ev.wallet, now);
   return { ok: true };
 }
 
@@ -163,35 +166,37 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
   }
 
   const isBuy = ev.action === "buy";
-  const tag = SEG_LABEL[ev.segment]; // Smart / Sniper / Insider / KOL
-  // Only show a real custom label (e.g. a KOL's name) — not generic Smart/Active.
-  const name =
+  const amount = fmtUsd(ev.amountUsd);
+  // A KOL's real name is worth showing; generic/source labels aren't.
+  const label =
     ev.label &&
     !["smart", "active", "toppnl", "highwr", ev.segment].includes(
       ev.label.toLowerCase(),
     )
-      ? ` <i>${ev.label}</i>`
+      ? ` <i>(${ev.label})</i>`
       : "";
 
-  const metrics = [
-    ev.liquidityUsd != null ? `💧 Liq ${fmtUsd(ev.liquidityUsd)}` : null,
-    ev.marketCapUsd != null ? `💰 MC ${fmtUsd(ev.marketCapUsd)}` : null,
+  // Clean, Moby-style headline: "{who} {verb} {amount} of {$TOKEN} at {mcap} MC".
+  // Scale-aware ("Whale" only when big), light verb variety, one line.
+  const seed = `${ev.wallet}:${ev.tokenMint || ev.token}:${ev.action}`;
+  const who = descriptor(ev.amountUsd);
+  const verbs = isBuy ? BUY_VERB : SELL_VERB;
+  const verb = verbs[hashIdx(seed, verbs.length)];
+  const emoji = isBuy ? (who === "Whale" ? "🐳" : "🟢") : "🔴";
+  const mc = ev.marketCapUsd != null ? ` at ${fmtUsd(ev.marketCapUsd)} MC` : "";
+  const wallet = `<a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a>`;
+
+  // Compact metrics: liquidity · age · anti-rug (mcap already in the headline).
+  const meta = [
+    ev.liquidityUsd != null ? `💧 ${fmtUsd(ev.liquidityUsd)} liq` : null,
     fmtAge(ev.tokenAgeMin) ? `🕒 ${fmtAge(ev.tokenAgeMin)}` : null,
+    antirugTag(ev),
   ].filter(Boolean);
 
-  // Rotate the framing per-event (stateless hash) so consecutive alerts read
-  // varied instead of one repeated template.
-  const seed = `${ev.wallet}:${ev.tokenMint || ev.token}:${ev.action}`;
-  const heads = isBuy ? BUY_HEAD : SELL_HEAD;
-  const verbs = isBuy ? BUY_VERB : SELL_VERB;
-  const head = heads[hashIdx(seed, heads.length)];
-  const verbWord = verbs[hashIdx(seed + "#v", verbs.length)];
-
   const lines = [
-    head(`$${ev.token}`),
-    `${tag}${name} · <a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a> ${verbWord} <b>${fmtUsd(ev.amountUsd)}</b>`,
-    metrics.length ? metrics.join("  ·  ") : null,
-    riskLine(ev),
+    `${emoji} <b>${who} ${verb} ${amount}</b> of <b>$${ev.token}</b>${mc}`,
+    `${wallet}${label}`,
+    meta.length ? meta.join("  ·  ") : null,
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
     socialLinks(ev.tokenMint, ev.socials),
   ].filter(Boolean) as string[];

@@ -9,6 +9,7 @@ import {
   globalRateGate,
   noveltyBlocked,
   pickStyle,
+  loadConfig,
   type TweetConfig,
   type PostedTweet,
 } from "../src/lib/server/tweetGate.ts";
@@ -118,6 +119,39 @@ test("buildTweet: each style renders distinct, valid copy", () => {
   }
   // unknown style key falls back to the first enabled style (classic)
   assert.equal(buildTweet(ev(), quality(), cfg(), "nope"), buildTweet(ev(), quality(), cfg(), "classic"));
+});
+
+// ── config / moby mode ────────────────────────────────────────────────────────
+test("loadConfig: Moby mode flips to a high-frequency, loose gate", () => {
+  const saved = { ...process.env };
+  try {
+    // Strict defaults (moby off).
+    for (const k of Object.keys(process.env))
+      if (k.startsWith("TWEET_")) delete process.env[k];
+    const strict = loadConfig();
+    assert.equal(strict.minUsd, 5000);
+    assert.equal(strict.maxMcap, 50_000_000);
+    assert.equal(strict.maxPerHour, 4);
+    assert.equal(strict.minWinRate, 60);
+
+    // Moby mode: $1k floor, no mcap cap, frequent, no win-rate gate.
+    process.env.TWEET_MOBY_MODE = "true";
+    const moby = loadConfig();
+    assert.equal(moby.minUsd, 1000);
+    assert.equal(moby.maxMcap, 0); // no upper cap → big-cap tokens pass
+    assert.equal(moby.minWinRate, 0);
+    assert.equal(moby.minConviction, 0);
+    assert.equal(moby.minSpacingSec, 60);
+    assert.ok(moby.maxPerHour >= 20);
+
+    // An explicit env var still overrides a Moby-mode default.
+    process.env.TWEET_MIN_USD = "2500";
+    assert.equal(loadConfig().minUsd, 2500);
+  } finally {
+    for (const k of Object.keys(process.env))
+      if (k.startsWith("TWEET_")) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
 });
 
 // ── style rotation ────────────────────────────────────────────────────────────

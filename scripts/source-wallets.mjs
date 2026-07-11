@@ -6,16 +6,25 @@
  * then polls exactly these wallets over a free public RPC — no webhook, no
  * Helius credit cap.
  *
- * Sources (all free, fail-soft):
- *   1. Active traders on trending memecoins (GeckoTerminal) — most reliable
- *   2. GMGN 7d PnL leaderboard (Cloudflare may block server-side)
- *   3. Birdeye gainers/losers (needs BIRDEYE_API_KEY — best quality, no Cloudflare)
- * Manual picks in data/smart-wallets.json always win on label/segment.
- *
  *   node scripts/source-wallets.mjs
  *
- * Tunables: ACTIVE_MIN_USD (1000), ACTIVE_POOLS (60), USE_GMGN_WALLETS,
- * GMGN_TRACK_LIMIT (100), BIRDEYE_API_KEY, BIRDEYE_TRACK_LIMIT (200).
+ * Sources (all fail-soft — a dead source never aborts the run):
+ *   1. Solana Tracker top traders by WIN RATE — best "high win-rate" signal.
+ *      Free key (data.solanatracker.io). Needs SOLANATRACKER_API_KEY.
+ *   2. Birdeye top traders by PnL — high quality, no Cloudflare.
+ *      Needs BIRDEYE_API_KEY. Runs several timeframes and de-dupes.
+ *   3. GeckoTerminal active traders — keyless baseline. FREE TIER IS 30 req/min,
+ *      so every call is serialized at ~2.2s; a run takes ~1 min.
+ *   4. GMGN 7d leaderboard — Cloudflare-blocks datacenter IPs (403); kept as a
+ *      best-effort only and off by default (USE_GMGN_WALLETS=true to try).
+ * Manual picks in data/smart-wallets.json always win on label/segment.
+ *
+ * Tunables (env or .env.local — this script loads .env.local itself):
+ *   SOLANATRACKER_API_KEY, SOLANATRACKER_LIMIT (150), SOLANATRACKER_MIN_WINRATE
+ *   (55), SOLANATRACKER_MIN_TRADES (20)
+ *   BIRDEYE_API_KEY, BIRDEYE_TRACK_LIMIT (200), BIRDEYE_TIMEFRAMES (1W,today,yesterday)
+ *   ACTIVE_MIN_USD (1000), ACTIVE_POOLS (20), GECKO_DELAY_MS (2200)
+ *   USE_GMGN_WALLETS (false), GMGN_TRACK_LIMIT (100)
  * The RPC poller covers a large set via a rotating window (RPC_MAX_WALLETS per
  * cycle), so a few hundred tracked wallets is fine — bump the limits above.
  */
@@ -23,9 +32,10 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 
 /**
  * Load .env.local into process.env (plain `node` doesn't read it — only Next
- * does). Without this, BIRDEYE_API_KEY lives in .env.local but is invisible to
- * this script, so the Birdeye source silently no-ops and we can end up sourcing
- * zero wallets. Existing env vars win, so an inline override still takes effect.
+ * does). Without this, BIRDEYE_API_KEY / SOLANATRACKER_API_KEY live in
+ * .env.local but are invisible here, so those sources silently no-op and we can
+ * end up sourcing zero wallets. Existing env vars win, so an inline override
+ * still takes effect.
  */
 async function loadDotEnvLocal() {
   let txt = "";
@@ -48,14 +58,19 @@ async function loadDotEnvLocal() {
     if (
       (val.startsWith('"') && val.endsWith('"')) ||
       (val.startsWith("'") && val.endsWith("'"))
-    )
+    ) {
       val = val.slice(1, -1);
+    } else {
+      const hash = val.indexOf(" #"); // strip an unquoted inline comment
+      if (hash !== -1) val = val.slice(0, hash).trim();
+    }
     if (process.env[key] === undefined) process.env[key] = val;
   }
 }
 await loadDotEnvLocal();
 
 const walletsFile = process.env.SMART_WALLETS_FILE || "data/smart-wallets.json";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let manual = [];
 try {
@@ -64,68 +79,187 @@ try {
   /* no manual list — auto-source only */
 }
 
-// 1) Active traders on trending tokens (GeckoTerminal, free, reliable).
-let active = [];
-if (process.env.USE_ACTIVE_TRADERS !== "false") {
-  const minUsd = Number(process.env.ACTIVE_MIN_USD || 1000);
-  const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 60));
-  try {
-    // Pull pools from several lists/pages so we sample a wide, fresh cross
-    // section of the market instead of just the current top-20 trending.
-    const listUrls = [
-      "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1",
-      "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=2",
-      "https://api.geckoterminal.com/api/v2/networks/solana/pools?page=1", // top by volume
-      "https://api.geckoterminal.com/api/v2/networks/solana/new_pools?page=1",
-    ];
-    const poolSet = new Set();
-    for (const url of listUrls) {
-      if (poolSet.size >= wantPools) break;
-      try {
-        const list = await (
-          await fetch(url, { headers: { accept: "application/json" } })
-        ).json();
-        for (const p of list?.data || []) {
-          const a = p?.attributes?.address;
-          if (a) poolSet.add(a);
-        }
-      } catch {
-        /* skip list */
+// ── 1) Solana Tracker — top traders ranked by WIN RATE (best signal) ──────────
+let stracker = [];
+if (process.env.SOLANATRACKER_API_KEY) {
+  const key = process.env.SOLANATRACKER_API_KEY;
+  const want = Math.max(1, Number(process.env.SOLANATRACKER_LIMIT || 150));
+  const minWr = Number(process.env.SOLANATRACKER_MIN_WINRATE || 55);
+  const minTrades = Number(process.env.SOLANATRACKER_MIN_TRADES || 20);
+  const seen = new Set();
+  for (let page = 1; page <= 25 && stracker.length < want; page++) {
+    if (page > 1) await sleep(1100); // free tier ~1 req/s
+    let json;
+    try {
+      const res = await fetch(
+        `https://data.solanatracker.io/top-traders/all?page=${page}&sortBy=winPercentage&expandPnl=true`,
+        { headers: { "x-api-key": key, accept: "application/json" } },
+      );
+      if (!res.ok) {
+        console.warn(`Solana Tracker failed (${res.status}) page ${page}`);
+        break;
       }
-      await new Promise((r) => setTimeout(r, 250));
+      json = await res.json();
+    } catch (e) {
+      console.warn("Solana Tracker fetch failed:", e.message);
+      break;
     }
-    const pools = [...poolSet].slice(0, wantPools);
-    const seen = new Set();
-    for (const addr of pools) {
-      try {
-        const tr = await (
-          await fetch(
-            `https://api.geckoterminal.com/api/v2/networks/solana/pools/${addr}/trades`,
-            { headers: { accept: "application/json" } },
-          )
-        ).json();
-        for (const t of tr?.data || []) {
-          const a = t?.attributes || {};
-          const w = a.tx_from_address;
-          if (w && (Number(a.volume_in_usd) || 0) >= minUsd && !seen.has(w)) {
-            seen.add(w);
-            active.push(w);
-          }
-        }
-      } catch {
-        /* skip pool */
+    const rows = Array.isArray(json) ? json : json?.wallets || json?.data || [];
+    if (!rows.length) break;
+    for (const r of rows) {
+      const w = r.wallet || r.address;
+      const s = r.summary || r;
+      const wr = Number(s.winPercentage ?? s.winRate ?? 0);
+      const wins = Number(s.totalWins ?? 0);
+      const losses = Number(s.totalLosses ?? 0);
+      const trades = wins + losses || Number(s.totalTrades ?? s.total ?? 0);
+      // Require a real win-rate AND enough trades so a lucky 1-2 trade "100%"
+      // wallet doesn't slip in. Unknown trade count → trust the win-rate sort.
+      if (w && wr >= minWr && (trades === 0 || trades >= minTrades) && !seen.has(w)) {
+        seen.add(w);
+        stracker.push(w);
       }
-      await new Promise((r) => setTimeout(r, 250)); // rate limit
     }
-    console.log(`Active traders (GeckoTerminal): ${active.length}`);
-  } catch (e) {
-    console.warn("Active-trader source failed:", e.message);
+    if (rows.length < 10) break; // likely the last page
   }
+  console.log(`Solana Tracker (high win-rate): ${stracker.length}`);
 }
 
-// 2) GMGN 7d PnL leaderboard (free; Cloudflare may block server-side).
+// ── 2) Birdeye — top traders by PnL, across several timeframes ────────────────
+let birdeye = [];
+if (process.env.BIRDEYE_API_KEY) {
+  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 200));
+  const PAGE = 10; // Birdeye caps limit at 10; paginate via offset
+  const timeframes = (process.env.BIRDEYE_TIMEFRAMES || "1W,today,yesterday")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const maxPages = Math.min(Math.ceil(want / PAGE), 30);
+  outer: for (const tf of timeframes) {
+    let retries = 0; // bounded 429 retries per timeframe (can't spin)
+    for (let i = 0; i < maxPages && birdeye.length < want; i++) {
+      await sleep(1100); // free "Standard" tier ~1 req/s
+      let res;
+      try {
+        res = await fetch(
+          `https://public-api.birdeye.so/trader/gainers-losers?type=${encodeURIComponent(tf)}&sort_by=PnL&sort_type=desc&offset=${i * PAGE}&limit=${PAGE}`,
+          {
+            headers: {
+              "X-API-KEY": process.env.BIRDEYE_API_KEY,
+              "x-chain": "solana",
+              accept: "application/json",
+            },
+          },
+        );
+      } catch (e) {
+        console.warn("Birdeye fetch failed:", e.message);
+        break;
+      }
+      if (res.status === 429) {
+        if (++retries > 5) {
+          console.warn("Birdeye 429 — giving up on this timeframe");
+          break;
+        }
+        console.warn("Birdeye 429 — backing off 5s");
+        await sleep(5000);
+        i--; // retry same page (retries counter bounds the spin)
+        continue;
+      }
+      if (!res.ok) {
+        console.warn(`Birdeye failed (${res.status}) tf=${tf} offset ${i * PAGE}`);
+        break;
+      }
+      const json = await res.json();
+      const items = json?.data?.items || json?.data || [];
+      const page = (Array.isArray(items) ? items : [])
+        .map((t) => t.address || t.owner || t.wallet)
+        .filter(Boolean);
+      if (!page.length) break; // end of this timeframe's list
+      for (const a of page) if (!seen.has(a)) (seen.add(a), birdeye.push(a));
+      if (page.length < PAGE) break;
+      if (birdeye.length >= want) break outer;
+    }
+  }
+  console.log(`Birdeye (top PnL): ${birdeye.length}`);
+}
+
+// ── 3) GeckoTerminal active traders — keyless, 30 req/min → serial ~2.2s ──────
+let active = [];
+if (process.env.USE_ACTIVE_TRADERS !== "false") {
+  const minUsd = Math.round(Number(process.env.ACTIVE_MIN_USD || 1000));
+  const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 20));
+  const GAP = Math.max(2100, Number(process.env.GECKO_DELAY_MS || 2200));
+  let lastCall = 0;
+  // Shared serial getter: enforces spacing + honors 429 (the free tier is a
+  // hard 30 req/min per IP, so bursting is what returned 0 before).
+  const geckoGet = async (url) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const wait = GAP - (Date.now() - lastCall);
+      if (wait > 0) await sleep(wait);
+      lastCall = Date.now();
+      let res;
+      try {
+        res = await fetch(url, { headers: { accept: "application/json" } });
+      } catch {
+        return null;
+      }
+      if (res.status === 429) {
+        const ra = Number(res.headers.get("retry-after")) || 5 * (attempt + 1);
+        console.warn(`GeckoTerminal 429 — backing off ${ra}s`);
+        await sleep(ra * 1000);
+        continue;
+      }
+      if (!res.ok) {
+        console.warn(`GeckoTerminal ${res.status} for ${url}`);
+        return null;
+      }
+      try {
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+  const base = "https://api.geckoterminal.com/api/v2/networks/solana";
+  const listUrls = [
+    `${base}/trending_pools?page=1`,
+    `${base}/pools?page=1&sort=h24_volume_usd_desc`,
+    `${base}/new_pools?page=1`,
+  ];
+  const poolSet = new Set();
+  for (const url of listUrls) {
+    if (poolSet.size >= wantPools) break;
+    const list = await geckoGet(url);
+    for (const p of list?.data || []) {
+      const a = p?.attributes?.address;
+      if (a) poolSet.add(a);
+    }
+  }
+  const pools = [...poolSet].slice(0, wantPools);
+  const seen = new Set();
+  for (const addr of pools) {
+    // Server-side volume floor (param) + keep buyers only (accumulation signal).
+    const tr = await geckoGet(
+      `${base}/pools/${addr}/trades?trade_volume_in_usd_greater_than=${minUsd}`,
+    );
+    for (const t of tr?.data || []) {
+      const a = t?.attributes || {};
+      if (a.kind && a.kind !== "buy") continue;
+      const w = a.tx_from_address;
+      if (w && !seen.has(w)) {
+        seen.add(w);
+        active.push(w);
+      }
+    }
+  }
+  console.log(`Active traders (GeckoTerminal): ${active.length} from ${pools.length} pools`);
+}
+
+// ── 4) GMGN 7d leaderboard — Cloudflare-blocks datacenter IPs; off by default ──
 let gmgn = [];
-if (process.env.USE_GMGN_WALLETS !== "false") {
+if (process.env.USE_GMGN_WALLETS === "true") {
   try {
     const res = await fetch(
       "https://gmgn.ai/defi/quotation/v1/rank/sol/wallets/7d?orderby=pnl_7d&direction=desc",
@@ -147,56 +281,26 @@ if (process.env.USE_GMGN_WALLETS !== "false") {
         .filter(Boolean);
       console.log(`GMGN: ${gmgn.length}`);
     } else {
-      console.warn(`GMGN failed (${res.status}) — Cloudflare likely. Skipping.`);
+      console.warn(`GMGN failed (${res.status}) — Cloudflare blocks datacenter IPs. Skipping.`);
     }
   } catch (e) {
     console.warn("GMGN fetch failed:", e.message);
   }
 }
 
-// 3) Birdeye gainers/losers (best quality; needs a free key).
-let birdeye = [];
-if (process.env.BIRDEYE_API_KEY) {
-  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 200));
-  const PAGE = 10;
-  const pages = Math.min(Math.ceil(want / PAGE), 30);
-  const seen = new Set();
-  for (let i = 0; i < pages && birdeye.length < want; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 1300));
-    try {
-      const res = await fetch(
-        `https://public-api.birdeye.so/trader/gainers-losers?type=1W&sort_by=PnL&sort_type=desc&offset=${i * PAGE}&limit=${PAGE}`,
-        { headers: { "X-API-KEY": process.env.BIRDEYE_API_KEY, "x-chain": "solana", accept: "application/json" } },
-      );
-      if (!res.ok) {
-        console.warn(`Birdeye failed (${res.status}) at offset ${i * PAGE}`);
-        break;
-      }
-      const json = await res.json();
-      const items = json?.data?.items || json?.data || [];
-      const page = (Array.isArray(items) ? items : [])
-        .map((t) => t.address || t.owner || t.wallet)
-        .filter(Boolean);
-      for (const a of page) if (!seen.has(a)) (seen.add(a), birdeye.push(a));
-      if (page.length < PAGE) break;
-    } catch (e) {
-      console.warn("Birdeye fetch failed:", e.message);
-      break;
-    }
-  }
-  console.log(`Birdeye: ${birdeye.length}`);
-}
-
-// Merge (manual wins on label/segment).
+// ── Merge (best signal wins the label; manual always wins) ────────────────────
 const map = new Map();
 for (const a of active) if (a) map.set(a, { address: a, label: "Active", segment: "smart" });
-for (const a of [...gmgn, ...birdeye]) if (a) map.set(a, { address: a, label: "Smart", segment: "smart" });
+for (const a of gmgn) if (a) map.set(a, { address: a, label: "Smart", segment: "smart" });
+for (const a of birdeye) if (a) map.set(a, { address: a, label: "TopPnL", segment: "smart" });
+for (const a of stracker) if (a) map.set(a, { address: a, label: "HighWR", segment: "smart" });
 for (const w of manual) if (w?.address) map.set(w.address, w);
 const tracked = [...map.values()];
 
 if (tracked.length === 0) {
   console.error(
-    "✗ No wallets sourced. Add BIRDEYE_API_KEY, or a manual list at " +
+    "✗ No wallets sourced. Set SOLANATRACKER_API_KEY or BIRDEYE_API_KEY in " +
+      ".env.local (GeckoTerminal alone can be thin), or add a manual list at " +
       `${walletsFile}: [{ "address": "...", "label": "Whale 1", "segment": "smart" }]`,
   );
   process.exit(1);
@@ -206,7 +310,7 @@ await mkdir("data", { recursive: true }).catch(() => {});
 await writeFile("data/tracked-wallets.json", JSON.stringify(tracked, null, 2));
 console.log(
   `\n✓ Wrote data/tracked-wallets.json — ${tracked.length} wallets ` +
-    `(active ${active.length}, gmgn ${gmgn.length}, birdeye ${birdeye.length}, manual ${manual.length}).`,
+    `(winrate ${stracker.length}, pnl ${birdeye.length}, active ${active.length}, gmgn ${gmgn.length}, manual ${manual.length}).`,
 );
 console.log(
   "Restart so the workers pick up the set:  pm2 restart apewise apewise-rpc",

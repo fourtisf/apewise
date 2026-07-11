@@ -175,6 +175,11 @@ test("pickStyle: least-recently-used, survives an empty history", () => {
   );
   // history entries for disabled styles are ignored.
   assert.equal(pickStyle([p("flow", 999), p("classic", 100)], c), "alert");
+  // cold start: history has NO style field (predates tracking) → rotate by count
+  // so it doesn't always land on classic.
+  const noStyle = (ts: number): PostedTweet => ({ ts, eventId: "x", wallet: "w", token: "T" });
+  assert.equal(pickStyle([noStyle(1), noStyle(2)], c), "punchy"); // 2 % 3 → punchy
+  assert.equal(pickStyle([noStyle(1)], c), "alert"); // 1 % 3 → alert
 });
 
 // ── hard gate ───────────────────────────────────────────────────────────────

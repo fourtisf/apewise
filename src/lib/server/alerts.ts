@@ -57,19 +57,38 @@ export function fmtUsd(n?: number): string | null {
   return `$${Math.round(n)}`;
 }
 
-const SEG_EMOJI: Record<SmartEvent["segment"], string> = {
-  smart: "🟢",
-  sniper: "⚡",
-  insider: "🔴",
-  kol: "🎤",
-};
-
 const SEG_LABEL: Record<SmartEvent["segment"], string> = {
   smart: "Smart",
   sniper: "Sniper",
   insider: "Insider",
   kol: "KOL",
 };
+
+// Rotating copy so the channel doesn't read as one repeated template. The
+// variant is chosen by a stateless hash of the event (wallet+mint+action), so
+// different events look different, the SAME event is stable, and it survives
+// restarts (no in-memory counter that resets to variant 0).
+const BUY_HEAD: ((t: string) => string)[] = [
+  (t) => `🟢 <b>SMART BUY</b> · <b>${t}</b>`,
+  (t) => `🐳 <b>WHALE ACCUMULATING</b> · <b>${t}</b>`,
+  (t) => `🚀 <b>SMART MONEY IN</b> · <b>${t}</b>`,
+  (t) => `💰 <b>FRESH BUY</b> · <b>${t}</b>`,
+  (t) => `📈 <b>SMART-MONEY BUY</b> · <b>${t}</b>`,
+];
+const SELL_HEAD: ((t: string) => string)[] = [
+  (t) => `🔴 <b>SMART SELL</b> · <b>${t}</b>`,
+  (t) => `📤 <b>WHALE EXIT</b> · <b>${t}</b>`,
+  (t) => `⚠️ <b>TAKING PROFIT</b> · <b>${t}</b>`,
+];
+const BUY_VERB = ["aped", "grabbed", "loaded up", "scooped", "bought"];
+const SELL_VERB = ["dumped", "offloaded", "sold", "exited"];
+
+/** Stateless string→[0,n) hash (djb2). Same input → same index, always. */
+function hashIdx(s: string, n: number): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return n > 0 ? h % n : 0;
+}
 
 function fmtAge(min?: number): string | null {
   if (min == null) return null;
@@ -143,12 +162,14 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     return;
   }
 
-  const verb = ev.action === "buy" ? "BUY" : "SELL";
+  const isBuy = ev.action === "buy";
   const tag = SEG_LABEL[ev.segment]; // Smart / Sniper / Insider / KOL
   // Only show a real custom label (e.g. a KOL's name) — not generic Smart/Active.
   const name =
     ev.label &&
-    !["smart", "active", ev.segment].includes(ev.label.toLowerCase())
+    !["smart", "active", "toppnl", "highwr", ev.segment].includes(
+      ev.label.toLowerCase(),
+    )
       ? ` <i>${ev.label}</i>`
       : "";
 
@@ -158,9 +179,17 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     fmtAge(ev.tokenAgeMin) ? `🕒 ${fmtAge(ev.tokenAgeMin)}` : null,
   ].filter(Boolean);
 
+  // Rotate the framing per-event (stateless hash) so consecutive alerts read
+  // varied instead of one repeated template.
+  const seed = `${ev.wallet}:${ev.tokenMint || ev.token}:${ev.action}`;
+  const heads = isBuy ? BUY_HEAD : SELL_HEAD;
+  const verbs = isBuy ? BUY_VERB : SELL_VERB;
+  const head = heads[hashIdx(seed, heads.length)];
+  const verbWord = verbs[hashIdx(seed + "#v", verbs.length)];
+
   const lines = [
-    `${SEG_EMOJI[ev.segment]} <b>${verb}</b> · <b>$${ev.token}</b>`,
-    `${tag}${name} · <a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a> · <b>${fmtUsd(ev.amountUsd)}</b>`,
+    head(`$${ev.token}`),
+    `${tag}${name} · <a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a> ${verbWord} <b>${fmtUsd(ev.amountUsd)}</b>`,
     metrics.length ? metrics.join("  ·  ") : null,
     riskLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,

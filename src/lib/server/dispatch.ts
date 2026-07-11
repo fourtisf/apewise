@@ -3,14 +3,20 @@ import { getTokenSocials } from "./socials";
 import { postToChannel, fmtUsd, socialLinks } from "./alerts";
 
 /**
- * Broadcast notable on-chain activity to the signals channel. Until Helius
- * smart-money tracking is wired, this posts BIG market buys (>= ALERT_MIN_USD)
- * from the live feed. De-duped per trade id; called on an interval by the alert
- * worker (or a cron) hitting /api/alerts/dispatch.
+ * Broadcast BIG market buys (>= ALERT_MIN_USD) from the live feed to the signals
+ * channel. This was the fallback BEFORE smart-money tracking was wired.
+ *
+ * OFF by default now: with tracked-wallet alerts live (sendAlert on the ingest
+ * paths), running this too posts the SAME token to the channel a second time in
+ * a different format — the "double post" users saw. It's also off-brand for a
+ * smart-money channel (it broadcasts any random market whale, not a tracked
+ * wallet). Set ALERTS_MARKET_FALLBACK=true only if you deliberately want the
+ * extra market-whale firehose alongside the tracked-wallet alerts.
  */
 const alerted = new Set<string>();
 
 export async function dispatchAlerts(): Promise<number> {
+  if (process.env.ALERTS_MARKET_FALLBACK !== "true") return 0;
   const minUsd = Number(process.env.ALERT_MIN_USD) || 250;
   const snap = await getMarketSnapshot();
   if (!snap) return 0;

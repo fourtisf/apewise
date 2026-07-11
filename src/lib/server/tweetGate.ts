@@ -337,11 +337,18 @@ export function pickStyle(hist: PostedTweet[], cfg: TweetConfig): string {
   const enabled = cfg.styles && cfg.styles.length ? cfg.styles : ["classic"];
   // Most-recent post timestamp per style key.
   const lastUsed = new Map<string, number>();
+  let styledCount = 0;
   for (const p of hist) {
     if (!p.style) continue;
+    styledCount++;
     const prev = lastUsed.get(p.style) ?? 0;
     if (p.ts > prev) lastUsed.set(p.style, p.ts);
   }
+  // Cold start: history predates style tracking (old posts have no `style`), so
+  // every style ties at "never used" and we'd always land on enabled[0]
+  // ("classic") for the first posts. Rotate by post count instead so copy
+  // varies immediately after a deploy, until real styled history accrues.
+  if (styledCount === 0) return enabled[hist.length % enabled.length];
   // Prefer a never-used style; otherwise the one idle the longest.
   let best = enabled[0];
   let bestTs = Infinity;

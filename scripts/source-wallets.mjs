@@ -21,6 +21,40 @@
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
+/**
+ * Load .env.local into process.env (plain `node` doesn't read it — only Next
+ * does). Without this, BIRDEYE_API_KEY lives in .env.local but is invisible to
+ * this script, so the Birdeye source silently no-ops and we can end up sourcing
+ * zero wallets. Existing env vars win, so an inline override still takes effect.
+ */
+async function loadDotEnvLocal() {
+  let txt = "";
+  try {
+    txt = await readFile(new URL("../.env.local", import.meta.url), "utf8");
+  } catch {
+    try {
+      txt = await readFile(".env.local", "utf8"); // fallback: cwd
+    } catch {
+      return;
+    }
+  }
+  for (const raw of txt.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    )
+      val = val.slice(1, -1);
+    if (process.env[key] === undefined) process.env[key] = val;
+  }
+}
+await loadDotEnvLocal();
+
 const walletsFile = process.env.SMART_WALLETS_FILE || "data/smart-wallets.json";
 
 let manual = [];

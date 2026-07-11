@@ -190,6 +190,12 @@ if (process.env.USE_ACTIVE_TRADERS !== "false") {
   const minUsd = Math.round(Number(process.env.ACTIVE_MIN_USD || 1000));
   const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 20));
   const GAP = Math.max(2100, Number(process.env.GECKO_DELAY_MS || 2200));
+  // Circuit breaker: if the egress IP is throttled by GeckoTerminal, every call
+  // 429s and retrying just wastes minutes. After this many CONSECUTIVE 429s we
+  // give up on the whole source (Birdeye/Solana Tracker already carry the load).
+  const GECKO_MAX_429 = Math.max(1, Number(process.env.GECKO_MAX_429 || 3));
+  let consec429 = 0;
+  let throttled = false;
   let lastCall = 0;
   // Shared serial getter: enforces spacing + honors 429 (the free tier is a
   // hard 30 req/min per IP, so bursting is what returned 0 before).
@@ -205,11 +211,19 @@ if (process.env.USE_ACTIVE_TRADERS !== "false") {
         return null;
       }
       if (res.status === 429) {
+        if (++consec429 >= GECKO_MAX_429) {
+          throttled = true; // IP is rate-limited — stop hammering, bail the source
+          console.warn(
+            `GeckoTerminal: IP throttled (${consec429}× 429) — skipping this source`,
+          );
+          return null;
+        }
         const ra = Number(res.headers.get("retry-after")) || 5 * (attempt + 1);
         console.warn(`GeckoTerminal 429 — backing off ${ra}s`);
         await sleep(ra * 1000);
         continue;
       }
+      consec429 = 0; // any non-429 response clears the streak
       if (!res.ok) {
         console.warn(`GeckoTerminal ${res.status} for ${url}`);
         return null;
@@ -230,7 +244,7 @@ if (process.env.USE_ACTIVE_TRADERS !== "false") {
   ];
   const poolSet = new Set();
   for (const url of listUrls) {
-    if (poolSet.size >= wantPools) break;
+    if (throttled || poolSet.size >= wantPools) break;
     const list = await geckoGet(url);
     for (const p of list?.data || []) {
       const a = p?.attributes?.address;
@@ -240,6 +254,7 @@ if (process.env.USE_ACTIVE_TRADERS !== "false") {
   const pools = [...poolSet].slice(0, wantPools);
   const seen = new Set();
   for (const addr of pools) {
+    if (throttled) break;
     // Server-side volume floor (param) + keep buyers only (accumulation signal).
     const tr = await geckoGet(
       `${base}/pools/${addr}/trades?trade_volume_in_usd_greater_than=${minUsd}`,

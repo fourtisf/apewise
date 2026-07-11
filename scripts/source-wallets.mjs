@@ -251,17 +251,21 @@ if (
   console.log(`Birdeye (token top-traders): ${bdtop.length} from ${mints.length} trending tokens`);
 }
 
-// ── 3) GeckoTerminal active traders — keyless, 30 req/min → serial ~2.2s ──────
+// ── 3) GeckoTerminal active traders — keyless bonus, OFF by default ───────────
+// Free tier is 30 req/min per IP; datacenter/VPS IPs are frequently already
+// throttled (constant 429s), and it's the lowest-quality source (active traders,
+// not proven winners). Birdeye (gainers + trending-token top-traders) carries
+// the load, so this is opt-in: set USE_ACTIVE_TRADERS=true to enable.
 let active = [];
-if (process.env.USE_ACTIVE_TRADERS !== "false") {
+if (process.env.USE_ACTIVE_TRADERS === "true") {
   const minUsd = Math.round(Number(process.env.ACTIVE_MIN_USD || 1000));
   const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 20));
   const GAP = Math.max(2100, Number(process.env.GECKO_DELAY_MS || 2200));
-  // Circuit breaker: if the egress IP is throttled by GeckoTerminal, every call
-  // 429s and retrying just wastes minutes. After this many CONSECUTIVE 429s we
-  // give up on the whole source (Birdeye/Solana Tracker already carry the load).
-  const GECKO_MAX_429 = Math.max(1, Number(process.env.GECKO_MAX_429 || 3));
-  let consec429 = 0;
+  // Circuit breaker: bail the whole source after this many TOTAL 429s (not
+  // consecutive — the list calls can succeed while the trades calls 429, which
+  // used to keep resetting a "consecutive" counter so it never tripped).
+  const GECKO_MAX_429 = Math.max(1, Number(process.env.GECKO_MAX_429 || 4));
+  let total429 = 0;
   let throttled = false;
   let lastCall = 0;
   // Shared serial getter: enforces spacing + honors 429 (the free tier is a
@@ -278,10 +282,10 @@ if (process.env.USE_ACTIVE_TRADERS !== "false") {
         return null;
       }
       if (res.status === 429) {
-        if (++consec429 >= GECKO_MAX_429) {
+        if (++total429 >= GECKO_MAX_429) {
           throttled = true; // IP is rate-limited — stop hammering, bail the source
           console.warn(
-            `GeckoTerminal: IP throttled (${consec429}× 429) — skipping this source`,
+            `GeckoTerminal: IP throttled (${total429}× 429) — skipping this source`,
           );
           return null;
         }
@@ -290,7 +294,6 @@ if (process.env.USE_ACTIVE_TRADERS !== "false") {
         await sleep(ra * 1000);
         continue;
       }
-      consec429 = 0; // any non-429 response clears the streak
       if (!res.ok) {
         console.warn(`GeckoTerminal ${res.status} for ${url}`);
         return null;

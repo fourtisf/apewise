@@ -137,14 +137,17 @@ export function loadConfig(): TweetConfig {
     minSpacingSec: num("TWEET_MIN_SPACING_SEC", 900),
     maxPerHour: num("TWEET_MAX_PER_HOUR", 4),
     maxPerDay: num("TWEET_MAX_PER_DAY", 24),
-    pairCooldownMin: num("TWEET_PAIR_COOLDOWN_MIN", 720),
-    tokenCooldownMin: num("TWEET_TOKEN_COOLDOWN_MIN", 180),
+    pairCooldownMin: num("TWEET_PAIR_COOLDOWN_MIN", 1440),
+    tokenCooldownMin: num("TWEET_TOKEN_COOLDOWN_MIN", 1440),
     styles: parseStyles(),
     whaleTag: process.env.TWEET_WHALE_TAG || "smart-money whale",
     showWinRate: bool("TWEET_SHOW_WINRATE", true),
     includeChartLink: bool("TWEET_INCLUDE_CHART_LINK", false),
     suffix: process.env.TWEET_SUFFIX || "",
-    mirrorTelegram: bool("TWEET_MIRROR_TELEGRAM", true),
+    // The Telegram signals channel already gets every qualifying buy from
+    // sendAlert() at ingest, so mirroring the tweeted pick would post the same
+    // token twice. Off by default — sendAlert is the single Telegram poster.
+    mirrorTelegram: bool("TWEET_MIRROR_TELEGRAM", false),
   };
 }
 
@@ -311,6 +314,37 @@ export interface PostedTweet {
   tokenMint?: string;
   token: string;
   tweetId?: string;
+  style?: string; // copy style used — drives least-recently-used rotation
+}
+
+/**
+ * Pick the next copy style with a least-recently-used rotation derived from the
+ * persisted history — NOT an in-memory counter. A counter resets to 0 on every
+ * worker/server restart, which pins every tweet to the first style ("classic")
+ * and makes the timeline read as one repeated template. Deriving from history
+ * survives restarts: whichever enabled style was used longest ago (or never)
+ * wins, so consecutive posts stay varied no matter how often the process cycles.
+ */
+export function pickStyle(hist: PostedTweet[], cfg: TweetConfig): string {
+  const enabled = cfg.styles && cfg.styles.length ? cfg.styles : ["classic"];
+  // Most-recent post timestamp per style key.
+  const lastUsed = new Map<string, number>();
+  for (const p of hist) {
+    if (!p.style) continue;
+    const prev = lastUsed.get(p.style) ?? 0;
+    if (p.ts > prev) lastUsed.set(p.style, p.ts);
+  }
+  // Prefer a never-used style; otherwise the one idle the longest.
+  let best = enabled[0];
+  let bestTs = Infinity;
+  for (const key of enabled) {
+    const ts = lastUsed.get(key) ?? 0; // never used → 0 → wins immediately
+    if (ts < bestTs) {
+      bestTs = ts;
+      best = key;
+    }
+  }
+  return best;
 }
 
 function lastPostAt(hist: PostedTweet[]): number {

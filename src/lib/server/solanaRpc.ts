@@ -176,6 +176,9 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // sighting so we never backfill a wallet's whole history on startup.
 const seen = new Map<string, string>();
 const initialized = new Set<string>();
+// Rotating window start, so a large wallet set can be covered a slice at a time
+// across cycles instead of hammering the RPC with every wallet every cycle.
+let pollOffset = 0;
 
 interface SigInfo {
   signature: string;
@@ -195,13 +198,25 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   } catch {
     wallets = [];
   }
-  // Keep this modest: polling is O(wallets × 1/interval) RPC calls EVERY cycle
-  // whether or not anyone trades, so a paid RPC (Helius) burns credits fast on
-  // this path. To track many wallets cheaply, use the push webhook
-  // (/api/ingest/helius) instead — it only costs you on real swaps.
-  const maxWallets = Number(process.env.RPC_MAX_WALLETS) || 60;
-  wallets = wallets.slice(0, maxWallets);
-  if (!wallets.length) return [];
+  // Cost is O(window × 1/interval) RPC calls EVERY cycle whether or not anyone
+  // trades. To track a LARGE wallet set cheaply we poll a rotating window each
+  // cycle (RPC_MAX_WALLETS wallets), advancing the start every cycle so the
+  // whole set is covered over a few cycles — full coverage, bounded RPC load.
+  // Each wallet keeps its own cursor, so a swap surfaces the next time its slice
+  // comes up (typically within a couple of minutes). Set RPC_ROTATE_WALLETS=false
+  // to always poll the first RPC_MAX_WALLETS instead.
+  const total = wallets.length;
+  if (!total) return [];
+  const windowSize = Math.max(1, Number(process.env.RPC_MAX_WALLETS) || 60);
+  if (process.env.RPC_ROTATE_WALLETS !== "false" && total > windowSize) {
+    const start = pollOffset % total;
+    const window: SmartWallet[] = [];
+    for (let i = 0; i < windowSize; i++) window.push(wallets[(start + i) % total]);
+    wallets = window;
+    pollOffset = (pollOffset + windowSize) % total;
+  } else {
+    wallets = wallets.slice(0, windowSize);
+  }
 
   const { getSolPriceUsd } = await import("./market");
   const solPrice = await getSolPriceUsd();

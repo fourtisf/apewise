@@ -14,8 +14,10 @@
  *
  *   node scripts/source-wallets.mjs
  *
- * Tunables: ACTIVE_MIN_USD (1000), ACTIVE_POOLS (20), USE_GMGN_WALLETS,
- * BIRDEYE_API_KEY, BIRDEYE_TRACK_LIMIT.
+ * Tunables: ACTIVE_MIN_USD (1000), ACTIVE_POOLS (60), USE_GMGN_WALLETS,
+ * GMGN_TRACK_LIMIT (100), BIRDEYE_API_KEY, BIRDEYE_TRACK_LIMIT (200).
+ * The RPC poller covers a large set via a rotating window (RPC_MAX_WALLETS per
+ * cycle), so a few hundred tracked wallets is fine — bump the limits above.
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
@@ -32,18 +34,33 @@ try {
 let active = [];
 if (process.env.USE_ACTIVE_TRADERS !== "false") {
   const minUsd = Number(process.env.ACTIVE_MIN_USD || 1000);
-  const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 20));
+  const wantPools = Math.max(1, Number(process.env.ACTIVE_POOLS || 60));
   try {
-    const tp = await (
-      await fetch(
-        "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1",
-        { headers: { accept: "application/json" } },
-      )
-    ).json();
-    const pools = (tp?.data || [])
-      .map((p) => p?.attributes?.address)
-      .filter(Boolean)
-      .slice(0, wantPools);
+    // Pull pools from several lists/pages so we sample a wide, fresh cross
+    // section of the market instead of just the current top-20 trending.
+    const listUrls = [
+      "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1",
+      "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=2",
+      "https://api.geckoterminal.com/api/v2/networks/solana/pools?page=1", // top by volume
+      "https://api.geckoterminal.com/api/v2/networks/solana/new_pools?page=1",
+    ];
+    const poolSet = new Set();
+    for (const url of listUrls) {
+      if (poolSet.size >= wantPools) break;
+      try {
+        const list = await (
+          await fetch(url, { headers: { accept: "application/json" } })
+        ).json();
+        for (const p of list?.data || []) {
+          const a = p?.attributes?.address;
+          if (a) poolSet.add(a);
+        }
+      } catch {
+        /* skip list */
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const pools = [...poolSet].slice(0, wantPools);
     const seen = new Set();
     for (const addr of pools) {
       try {
@@ -91,7 +108,7 @@ if (process.env.USE_GMGN_WALLETS !== "false") {
       const json = await res.json();
       const rank = json?.data?.rank || json?.data || [];
       gmgn = (Array.isArray(rank) ? rank : [])
-        .slice(0, 50)
+        .slice(0, Number(process.env.GMGN_TRACK_LIMIT || 100))
         .map((r) => r.wallet_address || r.address)
         .filter(Boolean);
       console.log(`GMGN: ${gmgn.length}`);
@@ -106,7 +123,7 @@ if (process.env.USE_GMGN_WALLETS !== "false") {
 // 3) Birdeye gainers/losers (best quality; needs a free key).
 let birdeye = [];
 if (process.env.BIRDEYE_API_KEY) {
-  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 50));
+  const want = Math.max(1, Number(process.env.BIRDEYE_TRACK_LIMIT || 200));
   const PAGE = 10;
   const pages = Math.min(Math.ceil(want / PAGE), 30);
   const seen = new Set();
@@ -157,4 +174,6 @@ console.log(
   `\n✓ Wrote data/tracked-wallets.json — ${tracked.length} wallets ` +
     `(active ${active.length}, gmgn ${gmgn.length}, birdeye ${birdeye.length}, manual ${manual.length}).`,
 );
-console.log("Restart the app so it picks up the set:  pm2 restart apewise");
+console.log(
+  "Restart so the workers pick up the set:  pm2 restart apewise apewise-rpc",
+);

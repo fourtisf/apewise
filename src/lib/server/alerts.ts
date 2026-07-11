@@ -111,10 +111,20 @@ export function socialLinks(
 // Per wallet+token cooldown (anti-spam).
 const lastAlertAt = new Map<string, number>();
 const COOLDOWN = (Number(process.env.ALERT_COOLDOWN_SEC) || 60) * 1000;
+// Floor on alert size so dust/test swaps (e.g. a $396 buy) never spam the
+// channel. Sells are exit signal at any size, so the floor is buy-only.
+const MIN_USD = Number(process.env.ALERT_MIN_USD) || 1000;
 
 function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (ev.risk?.verdict === "risk" && process.env.ALERT_ON_RISK !== "true") {
     return { ok: false, reason: "risk-suppressed" };
+  }
+  if (
+    ev.action === "buy" &&
+    MIN_USD > 0 &&
+    (ev.amountUsd == null || ev.amountUsd < MIN_USD)
+  ) {
+    return { ok: false, reason: "below-min-usd" };
   }
   const key = `${ev.wallet}:${ev.tokenMint || ev.token}`;
   const now = Date.now();

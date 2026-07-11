@@ -14,8 +14,8 @@ import {
   convictionScore,
   globalRateGate,
   noveltyBlocked,
+  pickStyle,
   type PostedTweet,
-  type TweetConfig,
 } from "./tweetGate";
 
 /**
@@ -115,13 +115,6 @@ export interface DispatchResult {
 // Guards against overlapping ticks (setInterval fire-and-forget + any concurrent
 // request) both clearing the rate gate and posting before either records.
 let dispatching = false;
-
-// Round-robin over the enabled copy styles so consecutive tweets read varied.
-let styleCounter = 0;
-function nextStyle(cfg: TweetConfig): string {
-  const list = cfg.styles && cfg.styles.length ? cfg.styles : ["classic"];
-  return list[styleCounter++ % list.length];
-}
 
 const escHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -224,7 +217,9 @@ async function runDispatch(): Promise<DispatchResult> {
 
   ranked.sort((a, b) => b.conv - a.conv);
   const best = ranked[0];
-  const text = buildTweet(best.ev, best.q, cfg, nextStyle(cfg));
+  // LRU style from persisted history — survives restarts so copy stays varied.
+  const style = pickStyle(posted, cfg);
+  const text = buildTweet(best.ev, best.q, cfg, style);
   const res = await postTweet(text);
 
   if (res.ok) {
@@ -236,6 +231,7 @@ async function runDispatch(): Promise<DispatchResult> {
       tokenMint: best.ev.tokenMint,
       token: best.ev.token,
       tweetId: res.id,
+      style,
     });
     // Mirror the premium pick to the Telegram signals channel (richer there:
     // the bare tweet + chart/socials + mint). Fail-soft — never blocks the tweet.

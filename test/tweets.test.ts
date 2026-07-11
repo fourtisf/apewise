@@ -8,6 +8,7 @@ import {
   convictionScore,
   globalRateGate,
   noveltyBlocked,
+  pickStyle,
   type TweetConfig,
   type PostedTweet,
 } from "../src/lib/server/tweetGate.ts";
@@ -117,6 +118,29 @@ test("buildTweet: each style renders distinct, valid copy", () => {
   }
   // unknown style key falls back to the first enabled style (classic)
   assert.equal(buildTweet(ev(), quality(), cfg(), "nope"), buildTweet(ev(), quality(), cfg(), "classic"));
+});
+
+// ── style rotation ────────────────────────────────────────────────────────────
+test("pickStyle: least-recently-used, survives an empty history", () => {
+  const c = cfg({ styles: ["classic", "alert", "punchy"] });
+  // Empty history → first enabled style.
+  assert.equal(pickStyle([], c), "classic");
+  const p = (style: string, ts: number): PostedTweet => ({
+    ts,
+    eventId: style,
+    wallet: "w",
+    token: "T",
+    style,
+  });
+  // classic + alert used, punchy never → punchy wins.
+  assert.equal(pickStyle([p("classic", 100), p("alert", 200)], c), "punchy");
+  // all used → the one idle the longest (classic at ts 100).
+  assert.equal(
+    pickStyle([p("classic", 100), p("alert", 200), p("punchy", 300)], c),
+    "classic",
+  );
+  // history entries for disabled styles are ignored.
+  assert.equal(pickStyle([p("flow", 999), p("classic", 100)], c), "alert");
 });
 
 // ── hard gate ───────────────────────────────────────────────────────────────

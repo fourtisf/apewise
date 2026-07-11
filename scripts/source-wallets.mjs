@@ -184,6 +184,73 @@ if (process.env.BIRDEYE_API_KEY) {
   console.log(`Birdeye (top PnL): ${birdeye.length}`);
 }
 
+// ── 2b) Birdeye — top traders OF trending tokens (SAME key, no extra signup) ──
+// The gainers-losers board is a finite ~150. This harvests the winning wallets
+// of each currently-trending token, so it adds many more high-quality wallets
+// without any new account. Fail-soft: if these endpoints aren't on your plan it
+// just logs 0 and the rest of the set is unaffected.
+let bdtop = [];
+if (
+  process.env.BIRDEYE_API_KEY &&
+  process.env.USE_BIRDEYE_TOPTRADERS !== "false"
+) {
+  const H = {
+    "X-API-KEY": process.env.BIRDEYE_API_KEY,
+    "x-chain": "solana",
+    accept: "application/json",
+  };
+  const wantTokens = Math.max(1, Number(process.env.BIRDEYE_TREND_TOKENS || 25));
+  const seen = new Set(birdeye); // don't recount wallets we already have
+  // 1) trending token mints
+  let mints = [];
+  try {
+    await sleep(1100);
+    const res = await fetch(
+      `https://public-api.birdeye.so/defi/token_trending?sort_by=rank&sort_type=asc&offset=0&limit=${wantTokens}`,
+      { headers: H },
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const toks =
+        json?.data?.tokens || json?.data?.items || json?.data || [];
+      mints = (Array.isArray(toks) ? toks : [])
+        .map((t) => (typeof t === "string" ? t : t.address || t.mint))
+        .filter((a) => typeof a === "string" && a.length > 20);
+    } else {
+      console.warn(`Birdeye trending failed (${res.status})`);
+    }
+  } catch (e) {
+    console.warn("Birdeye trending fetch failed:", e.message);
+  }
+  // 2) top traders of each trending token → their winning wallets
+  for (const mint of mints.slice(0, wantTokens)) {
+    await sleep(1100);
+    try {
+      const res = await fetch(
+        `https://public-api.birdeye.so/defi/v2/tokens/top_traders?address=${mint}&time_frame=24h&sort_by=volume&sort_type=desc&offset=0&limit=10`,
+        { headers: H },
+      );
+      if (res.status === 429) {
+        await sleep(4000);
+        continue;
+      }
+      if (!res.ok) continue;
+      const json = await res.json();
+      const items = json?.data?.items || json?.data || [];
+      for (const t of Array.isArray(items) ? items : []) {
+        const w = t.owner || t.address || t.wallet;
+        if (w && !seen.has(w)) {
+          seen.add(w);
+          bdtop.push(w);
+        }
+      }
+    } catch {
+      /* skip token */
+    }
+  }
+  console.log(`Birdeye (token top-traders): ${bdtop.length} from ${mints.length} trending tokens`);
+}
+
 // ── 3) GeckoTerminal active traders — keyless, 30 req/min → serial ~2.2s ──────
 let active = [];
 if (process.env.USE_ACTIVE_TRADERS !== "false") {
@@ -307,6 +374,7 @@ if (process.env.USE_GMGN_WALLETS === "true") {
 const map = new Map();
 for (const a of active) if (a) map.set(a, { address: a, label: "Active", segment: "smart" });
 for (const a of gmgn) if (a) map.set(a, { address: a, label: "Smart", segment: "smart" });
+for (const a of bdtop) if (a) map.set(a, { address: a, label: "TopTrader", segment: "smart" });
 for (const a of birdeye) if (a) map.set(a, { address: a, label: "TopPnL", segment: "smart" });
 for (const a of stracker) if (a) map.set(a, { address: a, label: "HighWR", segment: "smart" });
 for (const w of manual) if (w?.address) map.set(w.address, w);
@@ -325,7 +393,7 @@ await mkdir("data", { recursive: true }).catch(() => {});
 await writeFile("data/tracked-wallets.json", JSON.stringify(tracked, null, 2));
 console.log(
   `\n✓ Wrote data/tracked-wallets.json — ${tracked.length} wallets ` +
-    `(winrate ${stracker.length}, pnl ${birdeye.length}, active ${active.length}, gmgn ${gmgn.length}, manual ${manual.length}).`,
+    `(winrate ${stracker.length}, pnl ${birdeye.length}, toptrader ${bdtop.length}, active ${active.length}, gmgn ${gmgn.length}, manual ${manual.length}).`,
 );
 console.log(
   "Restart so the workers pick up the set:  pm2 restart apewise apewise-rpc",

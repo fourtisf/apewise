@@ -117,8 +117,16 @@ export function fmtUsd(n?: number): string | null {
 // restarts. The framing stays clean + Moby-like (one headline sentence); the
 // "whale vs smart money" descriptor is SCALE-AWARE so a tiny $25 trade is never
 // announced as a "whale".
-const BUY_VERB = ["bought", "accumulated", "added", "scooped", "aped"];
-const SELL_VERB = ["sold", "offloaded", "trimmed", "exited", "dumped"];
+const BUY_VERB = [
+  "bought",
+  "accumulated",
+  "added",
+  "scooped",
+  "aped",
+  "grabbed",
+  "swept up",
+];
+const SELL_VERB = ["sold", "offloaded", "trimmed", "exited", "dumped", "unloaded"];
 
 /** "Whale" only when the trade is actually big; else "Smart money". */
 function descriptor(amountUsd: number): string {
@@ -134,11 +142,10 @@ function hashIdx(s: string, n: number): number {
 }
 
 // Distinct Telegram HEADLINE styles — like the X copy styles, but for the
-// channel. The whole framing/structure changes between them (not just the verb),
-// and one is chosen per event by the stateless hash so consecutive alerts read
-// varied. Headlines carry ONLY action + size + ticker; market data lives on a
-// labeled metrics line below, so every post scans the same way. Set
-// ALERT_STYLES (comma list of indices, e.g. "0,2,4") to restrict the rotation.
+// channel. The whole framing/structure changes between them (not just the verb).
+// Headlines carry ONLY action + size + ticker; market data lives on a labeled
+// metrics line below, so every post scans the same way. Set ALERT_STYLES
+// (comma list of indices, e.g. "0,2,5") to restrict the rotation.
 interface AlertParts {
   isBuy: boolean;
   emoji: string; // scale/action emoji (🐳 / 🟢 / 🔴)
@@ -165,7 +172,43 @@ const ALERT_STYLES: ((p: AlertParts) => string)[] = [
     p.isBuy
       ? `🔥 <b>Smart money is loading ${p.tok}</b> — ${p.amount} buy`
       : `📤 <b>Smart money is exiting ${p.tok}</b> — ${p.amount} sell`,
+  // 5 · radar
+  (p) =>
+    p.isBuy
+      ? `🎯 <b>On the radar: ${p.tok}</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b>`
+      : `🎯 <b>Off the radar: ${p.tok}</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b>`,
+  // 6 · position
+  (p) =>
+    p.isBuy
+      ? `💼 <b>New position</b> — <b>${p.amount}</b> of <b>${p.tok}</b> by a tracked ${p.who.toLowerCase()}`
+      : `💼 <b>Position closed</b> — <b>${p.amount}</b> of <b>${p.tok}</b> ${p.verb} by a tracked ${p.who.toLowerCase()}`,
+  // 7 · watch
+  (p) =>
+    `👀 <b>${p.who} watch</b>: <b>${p.amount}</b> moved ${p.isBuy ? "into" : "out of"} <b>${p.tok}</b>`,
+  // 8 · conviction (buy) / profit-taking (sell)
+  (p) =>
+    p.isBuy
+      ? `💎 <b>Conviction buy</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b> of <b>${p.tok}</b>`
+      : `💰 <b>Taking profits</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b> of <b>${p.tok}</b>`,
+  // 9 · minimal
+  (p) =>
+    `${p.emoji} <b>${p.tok}</b> · <b>${p.amount}</b> ${p.isBuy ? "buy" : "sell"}`,
 ];
+
+// Consecutive posts must never repeat a headline: remember the last few styles
+// used and steer the hash away from them. In-memory on purpose — worst case a
+// restart repeats one style once. The hash still seeds the choice, so the same
+// event re-rendered picks a stable starting point.
+const recentStyles: number[] = [];
+function pickAlertStyle(seed: string, count: number): number {
+  const avoid = new Set(recentStyles);
+  let idx = hashIdx(seed, count);
+  for (let i = 0; i < count && avoid.has(idx); i++) idx = (idx + 1) % count;
+  recentStyles.push(idx);
+  const keep = Math.min(3, Math.max(0, count - 1));
+  while (recentStyles.length > keep) recentStyles.shift();
+  return idx;
+}
 
 /** Enabled headline styles from ALERT_STYLES (comma indices); default all. */
 function enabledAlertStyles(): ((p: AlertParts) => string)[] {
@@ -306,7 +349,7 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     tok: `$${escapeHtml(ev.token)}`,
   };
   const styles = enabledAlertStyles();
-  const headline = styles[hashIdx(seed, styles.length)](parts);
+  const headline = styles[pickAlertStyle(seed, styles.length)](parts);
   const wallet = `<a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a>`;
 
   // Trader credibility: observed win-rate when we have enough history — the

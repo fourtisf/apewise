@@ -206,17 +206,18 @@ async function ensureCursorsLoaded(): Promise<void> {
   }
 }
 
-async function persistCursors(): Promise<void> {
-  try {
-    await fs.mkdir(path.dirname(CURSOR_FILE), { recursive: true });
-    await fs.writeFile(
-      CURSOR_FILE,
-      JSON.stringify(Object.fromEntries(seen)),
-      "utf8",
-    );
-  } catch (e) {
-    console.error("[rpc-poll] cursor persist failed:", e);
-  }
+// Chained like the tweet pool's persist: concurrent poll invocations (worker
+// tick + a manual curl) could otherwise interleave two writeFile calls into
+// corrupt JSON, which would degrade to a full re-baseline on the next restart.
+let cursorWrite: Promise<unknown> = Promise.resolve();
+
+function persistCursors(): Promise<unknown> {
+  const snapshot = JSON.stringify(Object.fromEntries(seen));
+  cursorWrite = cursorWrite
+    .then(() => fs.mkdir(path.dirname(CURSOR_FILE), { recursive: true }))
+    .then(() => fs.writeFile(CURSOR_FILE, snapshot, "utf8"))
+    .catch((e) => console.error("[rpc-poll] cursor persist failed:", e));
+  return cursorWrite;
 }
 
 interface SigInfo {

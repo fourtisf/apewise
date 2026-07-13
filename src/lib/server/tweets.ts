@@ -102,9 +102,15 @@ async function ensurePoolLoaded(): Promise<void> {
   }
 }
 
+// Writes are chained: persistPool is fire-and-forget, and two overlapping
+// writeFile calls to the same path can interleave into corrupt JSON (which
+// would degrade to an empty pool on the next restart).
+let poolWrite: Promise<unknown> = Promise.resolve();
+
 function persistPool(): void {
   const snapshot = JSON.stringify([...pool.values()]);
-  fs.mkdir(path.dirname(POOL_FILE), { recursive: true })
+  poolWrite = poolWrite
+    .then(() => fs.mkdir(path.dirname(POOL_FILE), { recursive: true }))
     .then(() => fs.writeFile(POOL_FILE, snapshot, "utf8"))
     .catch((e) => console.error("[tweet] pool persist failed:", e));
 }

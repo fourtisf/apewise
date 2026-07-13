@@ -1,4 +1,7 @@
 import type { SmartEvent } from "./store";
+// walletQuality is imported dynamically inside sendAlert (like solanaRpc's
+// runtime deps): it pulls in store/score at module load, whose extensionless
+// relative imports don't resolve under plain `node --test`.
 
 /**
  * Escape text interpolated into Telegram HTML (parse_mode: "HTML"). Token
@@ -114,7 +117,7 @@ export function fmtUsd(n?: number): string | null {
 // restarts. The framing stays clean + Moby-like (one headline sentence); the
 // "whale vs smart money" descriptor is SCALE-AWARE so a tiny $25 trade is never
 // announced as a "whale".
-const BUY_VERB = ["bought", "grabbed", "scooped", "loaded up", "aped"];
+const BUY_VERB = ["bought", "accumulated", "added", "scooped", "aped"];
 const SELL_VERB = ["sold", "offloaded", "trimmed", "exited", "dumped"];
 
 /** "Whale" only when the trade is actually big; else "Smart money". */
@@ -133,41 +136,35 @@ function hashIdx(s: string, n: number): number {
 // Distinct Telegram HEADLINE styles — like the X copy styles, but for the
 // channel. The whole framing/structure changes between them (not just the verb),
 // and one is chosen per event by the stateless hash so consecutive alerts read
-// varied. Each stays clean, one line, and scale-aware. Set ALERT_STYLES (comma
-// list of indices, e.g. "0,1,4") to restrict the rotation.
+// varied. Headlines carry ONLY action + size + ticker; market data lives on a
+// labeled metrics line below, so every post scans the same way. Set
+// ALERT_STYLES (comma list of indices, e.g. "0,2,4") to restrict the rotation.
 interface AlertParts {
   isBuy: boolean;
   emoji: string; // scale/action emoji (🐳 / 🟢 / 🔴)
   who: string; // "Whale" | "Smart money"
-  verb: string; // bought / grabbed / sold / ...
+  verb: string; // bought / accumulated / sold / ...
   amount: string; // "$1.2K"
   tok: string; // "$PEPE"
-  mc: string; // "$2M" or ""
 }
 const ALERT_STYLES: ((p: AlertParts) => string)[] = [
-  // 0 · classic
+  // 0 · action-first
   (p) =>
-    `${p.emoji} <b>${p.who} ${p.verb} ${p.amount}</b> of <b>${p.tok}</b>${p.mc ? ` at ${p.mc} MC` : ""}`,
+    `${p.emoji} <b>${p.who.toUpperCase()} ${p.isBuy ? "BUY" : "SELL"}</b> — <b>${p.amount}</b> ${p.isBuy ? "into" : "out of"} <b>${p.tok}</b>`,
   // 1 · ticker-first
   (p) =>
-    `${p.emoji} <b>${p.tok}</b> · ${p.who} ${p.verb} <b>${p.amount}</b>${p.mc ? ` · ${p.mc} MC` : ""}`,
-  // 2 · alert
+    `${p.emoji} <b>${p.tok}</b> — ${p.who.toLowerCase()} just ${p.verb} <b>${p.amount}</b>`,
+  // 2 · signal
   (p) =>
-    `🚨 <b>${p.isBuy ? "BUY" : "SELL"} ALERT</b> — <b>${p.amount}</b> ${p.isBuy ? "into" : "out of"} <b>${p.tok}</b>${p.mc ? ` (${p.mc} MC)` : ""}`,
+    `🚨 <b>${p.isBuy ? "BUY" : "SELL"} SIGNAL</b> · <b>${p.tok}</b> · <b>${p.amount}</b>`,
   // 3 · flow
   (p) =>
-    `📊 <b>${p.isBuy ? "Inflow" : "Outflow"}</b> → <b>${p.tok}</b>: ${p.who} ${p.amount}${p.mc ? ` · ${p.mc} MC` : ""}`,
-  // 4 · punchy
-  (p) =>
-    `${p.emoji} <b>${p.tok}</b> — ${p.who.toLowerCase()} just ${p.verb} <b>${p.amount}</b>${p.mc ? ` (${p.mc} MC)` : ""}`,
-  // 5 · minimal
-  (p) =>
-    `${p.emoji} <b>${p.tok}</b> · ${p.amount} ${p.isBuy ? "buy" : "sell"}${p.mc ? ` · ${p.mc} MC` : ""}`,
-  // 6 · hype (buy) / trim (sell)
+    `${p.isBuy ? "📈" : "📉"} <b>${p.isBuy ? "Accumulation" : "Distribution"}</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b> of <b>${p.tok}</b>`,
+  // 4 · narrative
   (p) =>
     p.isBuy
-      ? `🔥 <b>Smart money is loading ${p.tok}</b> — ${p.amount} buy${p.mc ? ` at ${p.mc} MC` : ""}`
-      : `📤 <b>Smart money is trimming ${p.tok}</b> — ${p.amount} sell${p.mc ? ` at ${p.mc} MC` : ""}`,
+      ? `🔥 <b>Smart money is loading ${p.tok}</b> — ${p.amount} buy`
+      : `📤 <b>Smart money is exiting ${p.tok}</b> — ${p.amount} sell`,
 ];
 
 /** Enabled headline styles from ALERT_STYLES (comma indices); default all. */
@@ -182,13 +179,14 @@ function enabledAlertStyles(): ((p: AlertParts) => string)[] {
   return picked.length ? picked : ALERT_STYLES;
 }
 
-/** Compact anti-rug tag for the metrics line. */
-function antirugTag(ev: SmartEvent): string | null {
+/** Labeled anti-rug line — says WHY when there's a concern, not just an emoji. */
+function antirugLine(ev: SmartEvent): string | null {
   const r = ev.risk;
   if (!r || r.verdict === "unknown") return null;
-  if (r.verdict === "ok") return "🛡 safe";
-  if (r.verdict === "caution") return "⚠️ caution";
-  return "⛔ risky";
+  if (r.verdict === "ok") return "🛡 Anti-rug: passed";
+  const why = r.reasons[0] ? ` — ${escapeHtml(r.reasons[0])}` : "";
+  if (r.verdict === "caution") return `⚠️ Anti-rug: caution${why}`;
+  return `⛔ Anti-rug: high risk${why}`;
 }
 
 function fmtAge(min?: number): string | null {
@@ -233,10 +231,24 @@ const WALLET_COOLDOWN =
 // Floor on alert size — applies to BUYS AND SELLS so dust swaps (a $25 sell)
 // never spam the channel. This is what makes it read as a signal, not a feed.
 const MIN_USD = Number(process.env.ALERT_MIN_USD) || 1000;
+// Dead/rugged pools ("whale offloaded $34k" of a $0-liquidity token) read as
+// noise and erode trust. Skip when liquidity is KNOWN and below the floor;
+// unknown liquidity still passes (fail-soft). 0 disables.
+const MIN_LIQ_USD =
+  process.env.ALERT_MIN_LIQUIDITY_USD == null
+    ? 1000
+    : Number(process.env.ALERT_MIN_LIQUIDITY_USD);
 
 function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (ev.risk?.verdict === "risk" && process.env.ALERT_ON_RISK !== "true") {
     return { ok: false, reason: "risk-suppressed" };
+  }
+  if (
+    MIN_LIQ_USD > 0 &&
+    ev.liquidityUsd != null &&
+    ev.liquidityUsd < MIN_LIQ_USD
+  ) {
+    return { ok: false, reason: "thin-liq" };
   }
   if (process.env.ALERT_BUYS_ONLY === "true" && ev.action !== "buy") {
     return { ok: false, reason: "sells-off" };
@@ -292,26 +304,42 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     verb: verbs[hashIdx(seed + "#v", verbs.length)],
     amount: amount ?? "",
     tok: `$${escapeHtml(ev.token)}`,
-    mc: ev.marketCapUsd != null ? (fmtUsd(ev.marketCapUsd) ?? "") : "",
   };
   const styles = enabledAlertStyles();
   const headline = styles[hashIdx(seed, styles.length)](parts);
   const wallet = `<a href="https://solscan.io/account/${ev.wallet}">${ev.walletShort}</a>`;
 
-  // Compact metrics: liquidity · age · anti-rug (mcap already in the headline).
-  const meta = [
-    ev.liquidityUsd != null ? `💧 ${fmtUsd(ev.liquidityUsd)} liq` : null,
-    fmtAge(ev.tokenAgeMin) ? `🕒 ${fmtAge(ev.tokenAgeMin)}` : null,
-    antirugTag(ev),
+  // Trader credibility: observed win-rate when we have enough history — the
+  // single stat that separates a "signal" from a random trade. Fail-soft.
+  let wrTag = "";
+  try {
+    const { getWalletQuality } = await import("./walletQuality");
+    const q = await getWalletQuality(ev.wallet);
+    if (q?.observed && q.winRate > 0)
+      wrTag = `  ·  🎯 <b>${q.winRate}%</b> win-rate`;
+  } catch {
+    /* never block an alert on the stats engine */
+  }
+
+  // Labeled metrics so every post scans identically: MC · Liq · Age. Hide
+  // fields we don't know instead of printing "$0" (reads as broken data).
+  const metrics = [
+    ev.marketCapUsd != null ? `💰 MC <b>${fmtUsd(ev.marketCapUsd)}</b>` : null,
+    ev.liquidityUsd != null && ev.liquidityUsd > 0
+      ? `💧 Liq <b>${fmtUsd(ev.liquidityUsd)}</b>`
+      : null,
+    fmtAge(ev.tokenAgeMin) ? `🕒 Age ${fmtAge(ev.tokenAgeMin)}` : null,
   ].filter(Boolean);
 
   const lines = [
     headline,
-    `${wallet}${label}`,
-    meta.length ? meta.join("  ·  ") : null,
+    "",
+    `👤 ${wallet}${label}${wrTag}`,
+    metrics.length ? metrics.join("  ·  ") : null,
+    antirugLine(ev),
     ev.tokenMint ? `<code>${ev.tokenMint}</code>` : null,
     socialLinks(ev.tokenMint, ev.socials),
-  ].filter(Boolean) as string[];
+  ].filter((l) => l !== null) as string[];
 
   await postToChannel(lines.join("\n"));
 }

@@ -34,6 +34,9 @@ async function tick() {
   }
 }
 
-console.log(`ApeWise alert worker → ${url} every ${intervalMs / 1000}s`);
+// Never print the secret — PM2 logs get copied into issues/screenshots.
+console.log(
+  `ApeWise alert worker → ${url.replace(/secret=[^&]+/, "secret=***")} every ${intervalMs / 1000}s`,
+);
 tick();
 setInterval(tick, intervalMs);

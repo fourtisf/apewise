@@ -10,6 +10,7 @@ import {
   noveltyBlocked,
   pickStyle,
   loadConfig,
+  STYLE_KEYS,
   type TweetConfig,
   type PostedTweet,
 } from "../src/lib/server/tweetGate.ts";
@@ -94,7 +95,7 @@ test("cashtag: legal symbols get a $, weird ones fall back", () => {
 // ── copy ────────────────────────────────────────────────────────────────────
 test("buildTweet: Moby-style line with win-rate flair", () => {
   const t = buildTweet(ev(), quality(), cfg());
-  assert.match(t, /^🐳 A smart-money whale just bought \$25K of \$PEPE at \$2M MC/);
+  assert.match(t, /^🐳 A smart-money whale \(WALL\) just bought \$25K of \$PEPE at \$2M MC/);
   assert.match(t, /75% win-rate wallet/);
   assert.ok(t.length <= 280);
 });
@@ -112,13 +113,25 @@ test("buildTweet: never exceeds 280 chars", () => {
 test("buildTweet: scale-aware — small buys are never framed as whales", () => {
   // A $1.5K buy announced as a "whale"/"high-conviction" reads as fake.
   const small = ev({ amountUsd: 1500 });
-  assert.match(buildTweet(small, quality(), cfg(), "classic"), /^🟢 Smart money just bought \$1\.5K/);
+  assert.match(buildTweet(small, quality(), cfg(), "classic"), /^🟢 Smart money \(WALL\) just bought \$1\.5K/);
   assert.doesNotMatch(buildTweet(small, quality(), cfg(), "conviction"), /High-conviction/);
   assert.doesNotMatch(buildTweet(small, quality(), cfg(), "fomo"), /Whales are/);
-  assert.doesNotMatch(buildTweet(small, quality(), cfg(), "punchy"), /whale/i);
+  assert.doesNotMatch(buildTweet(small, quality(), cfg(), "punchy"), /whale just aped/i);
   // At/above the threshold the whale framing stays.
   assert.match(buildTweet(ev({ amountUsd: 25000 }), quality(), cfg(), "classic"), /^🐳 A smart-money whale/);
   assert.match(buildTweet(ev({ amountUsd: 79000 }), quality(), cfg(), "fomo"), /Whales are loading/);
+});
+
+test("buildTweet: every style names the actor — wallet address + wallet/whale word", () => {
+  for (const k of STYLE_KEYS) {
+    const whale = buildTweet(ev(), quality(), cfg(), k);
+    const small = buildTweet(ev({ amountUsd: 1500 }), quality(), cfg(), k);
+    for (const t of [whale, small]) {
+      assert.ok(t.includes("WALL"), `${k} must include the wallet address: ${t}`);
+      assert.match(t, /wallet|whale|smart money|smart-money/i);
+      assert.ok(t.length <= 280);
+    }
+  }
 });
 
 test("buildTweet: each style renders distinct, valid copy", () => {

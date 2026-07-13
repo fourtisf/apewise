@@ -47,28 +47,42 @@ const bool = (n, d) => {
   return r === "true";
 };
 
-// Mirror of STYLE_MAP in src/lib/server/tweetGate.ts.
+// Mirror of STYLE_MAP in src/lib/server/tweetGate.ts. Scale-aware (isWhale)
+// and every style names the actor: wallet short address + a wallet/whale word.
 const STYLE_MAP = {
   classic: (p) =>
-    `🐳 A ${p.whaleTag} just bought ${p.amount} of ${p.tok}` +
+    (p.isWhale
+      ? `🐳 A ${p.whaleTag} (${p.wallet}) just bought ${p.amount} of ${p.tok}`
+      : `🟢 Smart money (${p.wallet}) just bought ${p.amount} of ${p.tok}`) +
     (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
   alert: (p) =>
-    `🚨 Smart-money buy — ${p.amount} into ${p.tok}` +
-    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+    `🚨 Smart-money buy — wallet ${p.wallet} put ${p.amount} into ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate` : ""),
   punchy: (p) =>
-    `👀 A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped ${p.amount} into ${p.tok}` +
-    (p.mc ? ` (${p.mc} MC)` : ""),
+    `👀 ${p.isWhale ? `A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped` : "Smart money just aped"} ${p.amount} into ${p.tok}` +
+    (p.mc ? ` (${p.mc} MC)` : "") + ` — wallet ${p.wallet}`,
   conviction: (p) =>
-    `💎 High-conviction buy: ${p.amount} of ${p.tok}` +
-    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+    (p.isWhale
+      ? `💎 High-conviction buy: wallet ${p.wallet} took ${p.amount} of ${p.tok}`
+      : `💎 Quiet accumulation: wallet ${p.wallet} added ${p.amount} of ${p.tok}`) +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate` : ""),
   flow: (p) =>
-    `📊 Smart-money inflow → ${p.tok}: ${p.amount}` +
+    `📊 Smart-money inflow → ${p.tok}: ${p.isWhale ? "whale" : "wallet"} ${p.wallet} bought ${p.amount}` +
     (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? `. Wallet win-rate ${p.wr}%` : ""),
   fomo: (p) =>
-    `🔥 Whales are loading ${p.tok} — ${p.amount} buy` +
-    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+    `🔥 ${p.isWhale ? "Whales are" : "Smart money is"} loading ${p.tok} — ${p.wallet} bought ${p.amount}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+  radar: (p) =>
+    `🎯 On the radar: ${p.tok} — ${p.isWhale ? "whale" : "wallet"} ${p.wallet} added ${p.amount}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% WR` : ""),
+  position: (p) =>
+    `💼 New position: ${p.isWhale ? "whale" : "wallet"} ${p.wallet} opened ${p.amount} of ${p.tok}` +
+    (p.mc ? ` · ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% win-rate` : ""),
+  watch: (p) =>
+    `${p.isWhale ? "🐳 Whale watch" : "👀 Smart-money watch"}: ${p.wallet} moved ${p.amount} into ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% WR` : ""),
   minimal: (p) =>
-    `🐳 ${p.amount} → ${p.tok}` +
+    `${p.isWhale ? `🐳 Whale ${p.wallet}` : `🟢 Wallet ${p.wallet}`} → ${p.amount} ${p.tok}` +
     (p.mc ? ` at ${p.mc} MC` : "") + (p.wr ? ` · ${p.wr}% WR` : ""),
 };
 const STYLE_KEYS = Object.keys(STYLE_MAP);
@@ -85,6 +99,7 @@ const cfg = {
   minUsd: num("TWEET_MIN_USD", 10000),
   styles: parseStyles(),
   whaleTag: process.env.TWEET_WHALE_TAG || "smart-money whale",
+  whaleUsd: num("TWEET_WHALE_USD", 25000),
   showWinRate: bool("TWEET_SHOW_WINRATE", true),
   includeChartLink: bool("TWEET_INCLUDE_CHART_LINK", false),
   suffix: process.env.TWEET_SUFFIX || "",
@@ -111,7 +126,15 @@ function buildTweet(ev, styleKey) {
   const mc = ev.marketCapUsd != null ? fmtUsdTweet(ev.marketCapUsd) : "";
   const wr = cfg.showWinRate && ev.observed && ev.winRate > 0 ? ev.winRate : null;
   const key = STYLE_MAP[styleKey] ? styleKey : cfg.styles[0] || "classic";
-  let out = STYLE_MAP[key]({ whaleTag: cfg.whaleTag, amount, tok, mc, wr });
+  let out = STYLE_MAP[key]({
+    whaleTag: cfg.whaleTag,
+    isWhale: ev.amountUsd >= cfg.whaleUsd,
+    wallet: ev.wallet || "HRT2…cgvs",
+    amount,
+    tok,
+    mc,
+    wr,
+  });
   if (cfg.includeChartLink && ev.tokenMint) {
     const link = ` 📊 dexscreener.com/solana/${ev.tokenMint}`;
     if (out.length + link.length <= 280) out += link;

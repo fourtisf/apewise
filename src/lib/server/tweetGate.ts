@@ -76,6 +76,10 @@ export interface StyleParts {
    *  "high-conviction" — that's what makes a feed read as fake. True only at or
    *  above the whale threshold (TWEET_WHALE_USD). */
   isWhale: boolean;
+  /** Short wallet address ("HRT2…cgvs"). EVERY style must name the actor —
+   *  the address plus a "whale"/"wallet" word — so each tweet reads as a real
+   *  person buying, not an abstract market event. */
+  wallet: string;
   amount: string; // "$210K"
   tok: string; // "$BONK"
   mc: string; // "$2.1B" or ""
@@ -85,48 +89,50 @@ export interface StyleParts {
 export const STYLE_MAP: Record<string, (p: StyleParts) => string> = {
   classic: (p) =>
     (p.isWhale
-      ? `🐳 A ${p.whaleTag} just bought ${p.amount} of ${p.tok}`
-      : `🟢 Smart money just bought ${p.amount} of ${p.tok}`) +
+      ? `🐳 A ${p.whaleTag} (${p.wallet}) just bought ${p.amount} of ${p.tok}`
+      : `🟢 Smart money (${p.wallet}) just bought ${p.amount} of ${p.tok}`) +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
   alert: (p) =>
-    `🚨 Smart-money buy — ${p.amount} into ${p.tok}` +
+    `🚨 Smart-money buy — wallet ${p.wallet} put ${p.amount} into ${p.tok}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
-    (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+    (p.wr ? ` · ${p.wr}% win-rate` : ""),
   punchy: (p) =>
     `👀 ${
       p.isWhale
         ? `A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped`
         : "Smart money just aped"
-    } ${p.amount} into ${p.tok}` + (p.mc ? ` (${p.mc} MC)` : ""),
+    } ${p.amount} into ${p.tok}` +
+    (p.mc ? ` (${p.mc} MC)` : "") +
+    ` — wallet ${p.wallet}`,
   conviction: (p) =>
     (p.isWhale
-      ? `💎 High-conviction buy: ${p.amount} of ${p.tok}`
-      : `💎 Quiet accumulation: ${p.amount} of ${p.tok}`) +
+      ? `💎 High-conviction buy: wallet ${p.wallet} took ${p.amount} of ${p.tok}`
+      : `💎 Quiet accumulation: wallet ${p.wallet} added ${p.amount} of ${p.tok}`) +
     (p.mc ? ` at ${p.mc} MC` : "") +
-    (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
+    (p.wr ? ` · ${p.wr}% win-rate` : ""),
   flow: (p) =>
-    `📊 Smart-money inflow → ${p.tok}: ${p.amount}` +
+    `📊 Smart-money inflow → ${p.tok}: ${p.isWhale ? "whale" : "wallet"} ${p.wallet} bought ${p.amount}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? `. Wallet win-rate ${p.wr}%` : ""),
   fomo: (p) =>
-    `🔥 ${p.isWhale ? "Whales are" : "Smart money is"} loading ${p.tok} — ${p.amount} buy` +
+    `🔥 ${p.isWhale ? "Whales are" : "Smart money is"} loading ${p.tok} — ${p.wallet} bought ${p.amount}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
-    (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+    (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
   radar: (p) =>
-    `🎯 On the radar: ${p.tok} — ${p.isWhale ? "a whale" : "smart money"} added ${p.amount}` +
+    `🎯 On the radar: ${p.tok} — ${p.isWhale ? "whale" : "wallet"} ${p.wallet} added ${p.amount}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% WR` : ""),
   position: (p) =>
-    `💼 New position: ${p.amount} of ${p.tok} by a tracked ${p.isWhale ? "whale" : "wallet"}` +
+    `💼 New position: ${p.isWhale ? "whale" : "wallet"} ${p.wallet} opened ${p.amount} of ${p.tok}` +
     (p.mc ? ` · ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% win-rate` : ""),
   watch: (p) =>
-    `${p.isWhale ? "🐳 Whale watch" : "👀 Smart-money watch"}: ${p.amount} into ${p.tok}` +
+    `${p.isWhale ? "🐳 Whale watch" : "👀 Smart-money watch"}: ${p.wallet} moved ${p.amount} into ${p.tok}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% WR` : ""),
   minimal: (p) =>
-    `${p.isWhale ? "🐳" : "🟢"} ${p.amount} → ${p.tok}` +
+    `${p.isWhale ? `🐳 Whale ${p.wallet}` : `🟢 Wallet ${p.wallet}`} → ${p.amount} ${p.tok}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% WR` : ""),
 };
@@ -235,6 +241,7 @@ export function buildTweet(
   const line = STYLE_MAP[key]({
     whaleTag: cfg.whaleTag,
     isWhale,
+    wallet: ev.walletShort || ev.wallet.slice(0, 8),
     amount,
     tok,
     mc,

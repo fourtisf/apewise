@@ -36,4 +36,13 @@ else
   pm2 save
 fi
 
+# 5. Reload the workers too — they run the scripts from this checkout, so
+# leaving them on the old code after a deploy quietly reintroduces fixed bugs.
+for worker in apewise-alerts apewise-tweets apewise-rpc; do
+  if pm2 describe "${worker}" > /dev/null 2>&1; then
+    echo "▶ Reloading ${worker}…"
+    pm2 reload "${worker}"
+  fi
+done
+
 echo "✅ Deploy complete."

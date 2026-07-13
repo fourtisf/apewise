@@ -3,6 +3,7 @@ import { addEvents, type SmartEvent, type Chain } from "@/lib/server/store";
 import type { Segment } from "@/lib/server/wallets";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
+import { enqueueForTweet } from "@/lib/server/tweets";
 import { shortMint } from "@/lib/server/market";
 
 export const runtime = "nodejs";
@@ -84,6 +85,13 @@ export async function POST(req: Request) {
   await Promise.allSettled(events.map((e) => enrichEvent(e)));
   const fresh = await addEvents(events);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
+  // Same as the Helius/rpc-poll paths: queue qualifying buys for the auto-tweet
+  // channel — this route used to skip it, so its events could never be tweeted.
+  try {
+    enqueueForTweet(fresh);
+  } catch (e) {
+    console.error("[ingest] enqueueForTweet failed:", e);
+  }
 
   return NextResponse.json({ ok: true, ingested: fresh.length });
 }

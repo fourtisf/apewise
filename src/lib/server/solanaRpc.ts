@@ -1,3 +1,5 @@
+import { promises as fs } from "fs";
+import path from "path";
 import type { SmartEvent } from "./store";
 import type { SmartWallet } from "./wallets";
 // Runtime sibling deps (getSmartWallets, getSolPriceUsd) are imported dynamically
@@ -171,14 +173,51 @@ async function rpc<T>(method: string, params: unknown[]): Promise<T | null> {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Per-wallet cursor (newest processed signature). Module-level → persists across
-// requests within the single app process. `initialized` baselines the first
-// sighting so we never backfill a wallet's whole history on startup.
+// Per-wallet cursor (newest processed signature). Module-level AND persisted to
+// disk, so a restart/deploy resumes exactly where it left off instead of
+// re-baselining every wallet with only a short lookback. `initialized`
+// baselines the first sighting so we never backfill a wallet's whole history.
 const seen = new Map<string, string>();
 const initialized = new Set<string>();
 // Rotating window start, so a large wallet set can be covered a slice at a time
 // across cycles instead of hammering the RPC with every wallet every cycle.
 let pollOffset = 0;
+
+const CURSOR_FILE =
+  process.env.RPC_CURSOR_FILE ||
+  path.join(process.cwd(), "data", "rpc-cursors.json");
+let cursorsLoaded = false;
+
+async function ensureCursorsLoaded(): Promise<void> {
+  if (cursorsLoaded) return;
+  cursorsLoaded = true;
+  try {
+    const raw = JSON.parse(await fs.readFile(CURSOR_FILE, "utf8")) as Record<
+      string,
+      string
+    >;
+    for (const [w, sig] of Object.entries(raw)) {
+      if (typeof sig !== "string" || !sig) continue;
+      seen.set(w, sig);
+      initialized.add(w); // a persisted cursor means the wallet was baselined
+    }
+  } catch {
+    /* no file yet */
+  }
+}
+
+async function persistCursors(): Promise<void> {
+  try {
+    await fs.mkdir(path.dirname(CURSOR_FILE), { recursive: true });
+    await fs.writeFile(
+      CURSOR_FILE,
+      JSON.stringify(Object.fromEntries(seen)),
+      "utf8",
+    );
+  } catch (e) {
+    console.error("[rpc-poll] cursor persist failed:", e);
+  }
+}
 
 interface SigInfo {
   signature: string;
@@ -187,10 +226,54 @@ interface SigInfo {
 }
 
 /**
+ * All signatures for `wallet` NEWER than the cursor, newest-first — the RPC's
+ * `until` param excludes everything at/older than the cursor, so a caught-up
+ * wallet costs one cheap empty call. Pages via `before` so an active wallet
+ * that produced more than one page since its last slice doesn't silently lose
+ * the older ones (the old single-call version capped at `limit` and dropped
+ * the rest). Returns null when ANY call fails, so the caller leaves the cursor
+ * untouched and retries the whole batch next cycle — a throttled RPC must
+ * never translate into permanently skipped swaps.
+ */
+async function fetchSigsSince(
+  wallet: string,
+  cursor: string | undefined,
+  pageLimit: number,
+  callDelay: number,
+): Promise<SigInfo[] | null> {
+  // First sight has no cursor: one page is the baseline (lookback filters it).
+  const maxPages = cursor ? Math.max(1, Number(process.env.RPC_SIG_PAGES) || 3) : 1;
+  const out: SigInfo[] = [];
+  let before: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const params: Record<string, unknown> = { limit: pageLimit };
+    if (cursor) params.until = cursor;
+    if (before) params.before = before;
+    const page = await rpc<SigInfo[]>("getSignaturesForAddress", [wallet, params]);
+    await delay(callDelay);
+    if (!page) return null; // RPC failed — retry next cycle, cursor untouched
+    out.push(...page);
+    if (page.length < pageLimit) return out; // reached the cursor (or history start)
+    before = page[page.length - 1].signature;
+  }
+  // Page cap hit with a full page: even older signatures exist between the
+  // cursor and what we fetched. Advancing the cursor drops them — say so
+  // instead of losing them silently (bump RPC_SIG_PAGES if this recurs). A
+  // full FIRST page with no cursor is just a busy wallet's baseline, not loss.
+  if (cursor) {
+    console.warn(
+      `[rpc-poll] ${wallet.slice(0, 4)}… >${out.length} sigs since cursor; oldest dropped`,
+    );
+  }
+  return out;
+}
+
+/**
  * One poll cycle across all tracked wallets. Returns the new swap events found
  * (un-enriched, deduped downstream by txSig). Never throws.
  */
 export async function pollTrackedWallets(): Promise<SmartEvent[]> {
+  await ensureCursorsLoaded();
   let wallets: SmartWallet[] = [];
   try {
     const { getSmartWallets } = await import("./wallets");
@@ -205,8 +288,14 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   // Each wallet keeps its own cursor, so a swap surfaces the next time its slice
   // comes up (typically within a couple of minutes). Set RPC_ROTATE_WALLETS=false
   // to always poll the first RPC_MAX_WALLETS instead.
+  //
+  // Sort by address first: the merged live list (Birdeye/GMGN caches refresh
+  // every few minutes) reshuffles, and rotating by ARRAY POSITION over a
+  // reshuffling list skips some wallets and double-polls others. A stable order
+  // makes the window walk the whole set deterministically.
   const total = wallets.length;
   if (!total) return [];
+  wallets = [...wallets].sort((a, b) => (a.address < b.address ? -1 : 1));
   const windowSize = Math.max(1, Number(process.env.RPC_MAX_WALLETS) || 60);
   if (process.env.RPC_ROTATE_WALLETS !== "false" && total > windowSize) {
     const start = pollOffset % total;
@@ -223,51 +312,72 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   const callDelay = Number(process.env.RPC_CALL_DELAY_MS) || 150;
   const perWallet = Math.min(Number(process.env.RPC_SIGS_PER_WALLET) || 10, 25);
   const maxAgeMs = (Number(process.env.RPC_MAX_AGE_MIN) || 120) * 60_000;
-  // On first sight of a wallet (incl. after every app restart) look back a short
-  // window so recent smart trades surface immediately instead of waiting for a
-  // brand-new one. Dedup (addEvents by txSig) keeps restarts from re-alerting.
+  // On first sight of a wallet (before its cursor is persisted) look back a
+  // short window so recent smart trades surface immediately instead of waiting
+  // for a brand-new one. Dedup (addEvents by txSig) keeps re-runs from re-alerting.
   const lookbackMs = (Number(process.env.RPC_LOOKBACK_MIN) || 20) * 60_000;
   const out: SmartEvent[] = [];
+  let rpcFailures = 0;
 
   for (const wallet of wallets) {
     const w = wallet.address;
-    const sigs = await rpc<SigInfo[]>("getSignaturesForAddress", [
-      w,
-      { limit: perWallet },
-    ]);
-    await delay(callDelay);
-    if (!sigs || !sigs.length) continue;
-
-    const newest = sigs[0].signature;
-    const firstSight = !initialized.has(w);
-    initialized.add(w);
     const prevSeen = seen.get(w);
-
-    const fresh: SigInfo[] = [];
-    for (const s of sigs) {
-      if (prevSeen && s.signature === prevSeen) break; // caught up to cursor
-      fresh.push(s);
+    const sigs = await fetchSigsSince(w, prevSeen, perWallet, callDelay);
+    if (!sigs) {
+      rpcFailures++;
+      continue; // RPC failed — cursor untouched, this wallet retries next cycle
     }
-    seen.set(w, newest);
-    if (!fresh.length) continue;
+    if (!sigs.length) continue; // caught up
+    const firstSight = !initialized.has(w);
 
-    // Oldest-first so the feed ordering is chronological within the batch.
-    for (const s of fresh.reverse()) {
-      if (s.err) continue;
+    // Oldest-first so the feed ordering is chronological within the batch. The
+    // cursor only ever advances past signatures we actually PROCESSED: when a
+    // getTransaction call fails (free public RPCs 429 constantly) we stop this
+    // wallet's batch and resume from the last good signature next cycle. The
+    // old code advanced the cursor to `newest` up front, so every throttled
+    // fetch was a tracked-wallet swap silently lost forever.
+    let cursor = prevSeen;
+    for (const s of [...sigs].reverse()) {
+      if (s.err) {
+        cursor = s.signature; // failed on-chain tx — nothing to fetch
+        continue;
+      }
       // First sight: only the recent lookback window. Ongoing: cursor bounds it,
       // with a generous staleness guard.
       const ageMs = s.blockTime ? Date.now() - s.blockTime * 1000 : 0;
-      if (ageMs > (firstSight ? lookbackMs : maxAgeMs)) continue;
+      if (ageMs > (firstSight ? lookbackMs : maxAgeMs)) {
+        cursor = s.signature;
+        continue;
+      }
       const tx = await rpc<RpcTx>("getTransaction", [
         s.signature,
         { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" },
       ]);
       await delay(callDelay);
-      if (!tx) continue;
+      if (!tx) {
+        rpcFailures++;
+        break; // throttled — retry from `cursor` next cycle instead of dropping
+      }
+      cursor = s.signature;
       const ev = parseRpcSwap(tx, wallet, solPrice);
       if (ev) out.push(ev);
     }
+    // No cursor movement (e.g. the very first fetch failed) leaves the wallet
+    // un-baselined, so the lookback still applies when its slice comes again.
+    if (cursor && cursor !== prevSeen) {
+      seen.set(w, cursor);
+      initialized.add(w);
+    }
   }
+
+  // Observability: sustained failures = the RPC is throttling this IP, which
+  // starves the whole pipeline. Surface it instead of failing silently.
+  if (rpcFailures > 0) {
+    console.warn(
+      `[rpc-poll] ${rpcFailures} RPC call(s) failed/throttled this cycle (rpc=${activeRpcUrl()})`,
+    );
+  }
+  await persistCursors();
 
   return out;
 }

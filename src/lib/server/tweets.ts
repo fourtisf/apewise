@@ -4,7 +4,8 @@ import type { SmartEvent } from "./store";
 import type { WalletQuality } from "./walletQuality";
 import { walletQualityMap } from "./walletQuality";
 import { postTweet, twitterConfigured } from "./twitter";
-import { postToChannel, socialLinks } from "./alerts";
+import { postToChannel, socialLinks, escapeHtml } from "./alerts";
+import { enrichEvent } from "./enrich";
 import {
   loadConfig,
   buildTweet,
@@ -76,11 +77,44 @@ async function record(p: PostedTweet): Promise<void> {
 const pool = new Map<string, { ev: SmartEvent; at: number }>();
 const POOL_MAX = 300;
 
+// The pool is persisted too: it used to be memory-only, so every deploy/PM2
+// restart threw away queued-but-not-yet-tweeted candidates — one more way the
+// account went quiet. Best-effort JSON snapshot; TTL purge on dispatch keeps a
+// stale file from resurrecting old buys.
+const POOL_FILE =
+  process.env.TWEET_POOL_FILE || path.join(process.cwd(), "data", "tweet-pool.json");
+let poolLoaded = false;
+
+async function ensurePoolLoaded(): Promise<void> {
+  if (poolLoaded) return;
+  poolLoaded = true;
+  try {
+    const arr = JSON.parse(await fs.readFile(POOL_FILE, "utf8")) as {
+      ev: SmartEvent;
+      at: number;
+    }[];
+    for (const c of Array.isArray(arr) ? arr : []) {
+      if (!c?.ev?.id || pool.has(c.ev.id) || postedIds.has(c.ev.id)) continue;
+      pool.set(c.ev.id, c);
+    }
+  } catch {
+    /* no file yet */
+  }
+}
+
+function persistPool(): void {
+  const snapshot = JSON.stringify([...pool.values()]);
+  fs.mkdir(path.dirname(POOL_FILE), { recursive: true })
+    .then(() => fs.writeFile(POOL_FILE, snapshot, "utf8"))
+    .catch((e) => console.error("[tweet] pool persist failed:", e));
+}
+
 /**
  * Cheap structural pre-filter → pool. The full gate (async wallet quality,
  * rate limits) runs at dispatch. Returns how many were queued.
  */
 export function enqueueForTweet(events: SmartEvent[]): number {
+  void ensurePoolLoaded(); // kick off the disk load; merge is id-deduped so racing is benign
   const cfg = loadConfig();
   let queued = 0;
   for (const ev of events) {
@@ -96,6 +130,7 @@ export function enqueueForTweet(events: SmartEvent[]): number {
     const entries = [...pool.entries()].sort((a, b) => a[1].at - b[1].at);
     for (let i = 0; i < pool.size - POOL_MAX; i++) pool.delete(entries[i][0]);
   }
+  if (queued > 0) persistPool();
   return queued;
 }
 
@@ -115,9 +150,6 @@ export interface DispatchResult {
 // Guards against overlapping ticks (setInterval fire-and-forget + any concurrent
 // request) both clearing the rate gate and posting before either records.
 let dispatching = false;
-
-const escHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 function fmtAgeShort(min?: number): string | null {
   if (min == null) return null;
@@ -139,7 +171,7 @@ async function mirrorToTelegram(
   conv: number,
 ): Promise<void> {
   const amount = fmtUsdTweet(ev.amountUsd);
-  const tok = escHtml(cashtag(ev.token));
+  const tok = escapeHtml(cashtag(ev.token));
   const metrics = [
     ev.marketCapUsd != null ? `💰 MC ${fmtUsdTweet(ev.marketCapUsd)}` : null,
     ev.liquidityUsd != null ? `💧 Liq ${fmtUsdTweet(ev.liquidityUsd)}` : null,
@@ -185,14 +217,17 @@ export async function dispatchTweets(): Promise<DispatchResult> {
 
 async function runDispatch(): Promise<DispatchResult> {
   await ensureLoaded();
+  await ensurePoolLoaded();
   const cfg = loadConfig();
   const now = Date.now();
 
   // Drop stale candidates + anything already posted (e.g. re-delivered after a
   // restart loaded the history).
   const ttl = cfg.candidateTtlMin * 60_000;
+  const sizeBefore = pool.size;
   for (const [id, c] of pool)
     if (now - c.at > ttl || postedIds.has(id)) pool.delete(id);
+  if (pool.size !== sizeBefore) persistPool();
   if (pool.size === 0) return { posted: 0, considered: 0 };
 
   // Global pacing — if we're inside any window cap, post nothing this tick.
@@ -200,6 +235,26 @@ async function runDispatch(): Promise<DispatchResult> {
   if (!gate.ok) {
     console.log(`[tweet] paced (${gate.reason}); pool=${pool.size}`);
     return { posted: 0, considered: pool.size, blocked: gate.reason };
+  }
+
+  // Second-chance enrichment. Market data / anti-rug are filled ONCE at ingest;
+  // a transient DexScreener/RugCheck failure there left the candidate without
+  // the fields the gate requires, permanently disqualifying it (Telegram still
+  // posted it — the classic "TG posted, X didn't"). Re-enrich the few candidates
+  // whose gate-critical fields are missing; bounded per tick, and the market
+  // fetches are cached so this stays cheap.
+  const needsEnrich = [...pool.values()]
+    .filter(
+      ({ ev }) =>
+        (cfg.minLiquidityUsd > 0 && ev.liquidityUsd == null) ||
+        ((cfg.minMcap > 0 || cfg.maxMcap > 0) && ev.marketCapUsd == null) ||
+        (cfg.requireAntirugOk && (!ev.risk || ev.risk.verdict === "unknown")),
+    )
+    .sort((a, b) => b.ev.amountUsd - a.ev.amountUsd)
+    .slice(0, 6);
+  if (needsEnrich.length) {
+    await Promise.allSettled(needsEnrich.map((c) => enrichEvent(c.ev)));
+    persistPool();
   }
 
   const qmap = await walletQualityMap();
@@ -224,6 +279,7 @@ async function runDispatch(): Promise<DispatchResult> {
 
   if (res.ok) {
     pool.delete(best.ev.id);
+    persistPool();
     await record({
       ts: now,
       eventId: best.ev.id,
@@ -250,12 +306,14 @@ async function runDispatch(): Promise<DispatchResult> {
   // once keys land; drop the preview so we don't re-log it forever.
   if (res.dryRun) {
     pool.delete(best.ev.id);
+    persistPool();
     return { posted: 0, considered: pool.size, blocked: "no-keys" };
   }
 
   // Duplicate content: consume it and set cooldowns so we don't retry the pair.
   if (res.duplicate) {
     pool.delete(best.ev.id);
+    persistPool();
     await record({
       ts: now,
       eventId: best.ev.id,
@@ -268,7 +326,10 @@ async function runDispatch(): Promise<DispatchResult> {
 
   // Rate-limited by X → keep the candidate and back off (our own spacing gate
   // will throttle the retry). Any other error → drop it so it can't wedge.
-  if (!res.rateLimited) pool.delete(best.ev.id);
+  if (!res.rateLimited) {
+    pool.delete(best.ev.id);
+    persistPool();
+  }
   return { posted: 0, considered: pool.size, blocked: res.error };
 }
 

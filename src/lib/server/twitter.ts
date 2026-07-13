@@ -146,6 +146,17 @@ export async function postTweet(text: string): Promise<TweetResult> {
       body: JSON.stringify({ text }),
     });
 
+    // X's remaining-quota headers are the only visibility into the (small)
+    // free-tier write budget — log them so "the account went quiet" is
+    // diagnosable from PM2 logs instead of invisible.
+    const remaining =
+      res.headers.get("x-app-limit-24hour-remaining") ??
+      res.headers.get("x-user-limit-24hour-remaining") ??
+      res.headers.get("x-rate-limit-remaining");
+    if (remaining != null && Number(remaining) <= 5) {
+      console.warn(`[x] write quota low: ${remaining} remaining in window`);
+    }
+
     if (res.ok) {
       const j = (await res.json().catch(() => null)) as
         | { data?: { id?: string } }
@@ -155,7 +166,17 @@ export async function postTweet(text: string): Promise<TweetResult> {
 
     const body = await res.text().catch(() => "");
     if (res.status === 429) {
-      console.warn("[x] rate limited (429):", body.slice(0, 200));
+      const reset =
+        res.headers.get("x-app-limit-24hour-reset") ??
+        res.headers.get("x-user-limit-24hour-reset") ??
+        res.headers.get("x-rate-limit-reset");
+      const mins = reset
+        ? Math.max(0, Math.round((Number(reset) * 1000 - Date.now()) / 60_000))
+        : null;
+      console.warn(
+        `[x] rate limited (429)${mins != null ? ` — resets in ~${mins}m` : ""}:`,
+        body.slice(0, 200),
+      );
       return { ok: false, rateLimited: true, error: "rate-limited" };
     }
     // X returns 403 with a duplicate-content detail for repeat text.

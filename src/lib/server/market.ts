@@ -97,12 +97,17 @@ function parseSocials(info?: DexPair["info"]): TokenSocials | undefined {
   return out.website || out.twitter || out.telegram ? out : undefined;
 }
 
-const marketCache = new Map<string, { at: number; data: TokenMarket }>();
+const marketCache = new Map<string, { at: number; data: TokenMarket; ok: boolean }>();
 const MARKET_TTL = 60_000;
+// A failed/empty lookup (DexScreener down, token not indexed yet) expires much
+// sooner: gates downstream need liquidity/mcap, and caching the miss for the
+// full TTL kept re-enrichment from ever seeing the data once it appeared.
+const MARKET_MISS_TTL = 15_000;
 
 export async function getTokenMarket(mint: string): Promise<TokenMarket> {
   const cached = marketCache.get(mint);
-  if (cached && Date.now() - cached.at < MARKET_TTL) return cached.data;
+  if (cached && Date.now() - cached.at < (cached.ok ? MARKET_TTL : MARKET_MISS_TTL))
+    return cached.data;
 
   let data: TokenMarket = { symbol: shortMint(mint) };
   const json = (await fetchJson(
@@ -135,7 +140,7 @@ export async function getTokenMarket(mint: string): Promise<TokenMarket> {
     data.marketCapUsd = gt != null && gt < 5e10 ? gt : undefined;
   }
 
-  marketCache.set(mint, { at: Date.now(), data });
+  marketCache.set(mint, { at: Date.now(), data, ok: pairs.length > 0 });
   return data;
 }
 

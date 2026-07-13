@@ -223,6 +223,23 @@ test("hardGate: wallet quality is the decisive smart-money filter", () => {
   assert.equal(hardGate(ev(), quality({ observed: false }), cfg({ strictWinRate: true })).reason, "insufficient-history");
 });
 
+test("hardGate: minWinRate 0 (Moby mode) disables the wallet-quality gate entirely", () => {
+  // Observed PnL is a partial-window proxy; an accumulating wallet looks deeply
+  // negative. With the gate off, that must NOT block the tweet.
+  const accumulating = quality({ winRate: 0, pnlUsd: -50_000 });
+  assert.equal(hardGate(ev(), accumulating, cfg({ minWinRate: 0 })).ok, true);
+  // With a real threshold the pnl>0 requirement still applies.
+  assert.equal(
+    hardGate(ev(), quality({ winRate: 80, pnlUsd: -10 }), cfg()).reason,
+    "low-winrate",
+  );
+  // The segment gate is independent and stays on either way.
+  assert.equal(
+    hardGate(ev(), quality({ segment: "kol", winRate: 0, pnlUsd: -1 }), cfg({ minWinRate: 0 })).reason,
+    "segment",
+  );
+});
+
 // ── conviction ──────────────────────────────────────────────────────────────
 test("convictionScore: rewards higher win-rate and larger size", () => {
   const strong = convictionScore(ev({ amountUsd: 500000 }), quality({ winRate: 90 }), cfg());

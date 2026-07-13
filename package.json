@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --experimental-strip-types --test test/score.test.ts test/market.test.ts test/store.test.ts test/marketlive.test.ts test/gmgn.test.ts test/birdeye.test.ts test/solanarpc.test.ts test/tweets.test.ts test/twitter.test.ts"
+    "test": "node --experimental-strip-types --test test/score.test.ts test/market.test.ts test/store.test.ts test/marketlive.test.ts test/gmgn.test.ts test/birdeye.test.ts test/solanarpc.test.ts test/tweets.test.ts test/twitter.test.ts test/alerts.test.ts"
   },
   "dependencies": {
     "framer-motion": "^11.11.0",

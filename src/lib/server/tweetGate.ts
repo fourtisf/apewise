@@ -240,6 +240,12 @@ function walletGate(
     return cfg.strictWinRate ? { ok: false, reason: "no-history" } : { ok: true };
 
   if (q.observed) {
+    // minWinRate 0 = the operator turned the wallet-quality gate off (Moby
+    // mode). The pnl>0 check must go with it: observed PnL is a sells−buys
+    // proxy over a partial window, so a wallet still accumulating looks deeply
+    // negative — keeping the check silently mutes more wallets the longer the
+    // system runs.
+    if (cfg.minWinRate <= 0) return { ok: true };
     if (q.winRate >= cfg.minWinRate && q.pnlUsd > 0) return { ok: true };
     return { ok: false, reason: "low-winrate" };
   }

@@ -1,6 +1,27 @@
 import type { SmartEvent } from "./store";
 
-/** Low-level Telegram sendMessage to any chat. No-op (logs) without a token. */
+/**
+ * Escape text interpolated into Telegram HTML (parse_mode: "HTML"). Token
+ * symbols/labels are arbitrary on Solana — an unescaped `&`, `<` or `>` makes
+ * the whole sendMessage fail with 400 "can't parse entities" and the alert is
+ * lost. `"` is included so the same helper is safe inside attribute values.
+ */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Low-level Telegram sendMessage to any chat. No-op (logs) without a token.
+ * Retries transient failures (network, 5xx, 429 honoring `retry_after`) — the
+ * caller has already marked the event as ingested, so a dropped send here was
+ * an alert lost forever.
+ */
 export async function tgSend(
   chatId: string | number,
   text: string,
@@ -11,27 +32,55 @@ export async function tgSend(
     console.log(`[tg] (no token)\n${text}`);
     return false;
   }
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-      }),
-    });
-    if (!res.ok) {
-      console.error("[tg] error:", await res.text());
+  const body = JSON.stringify({
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  });
+  const ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        },
+      );
+      if (res.ok) return true;
+      const errText = await res.text().catch(() => "");
+      if (res.status === 429 && attempt < ATTEMPTS) {
+        // Telegram says exactly how long to wait; anything longer than ~30s
+        // isn't worth stalling the ingest path for.
+        let wait = 2;
+        try {
+          wait = Number(JSON.parse(errText)?.parameters?.retry_after) || 2;
+        } catch {
+          /* keep default */
+        }
+        if (wait <= 30) {
+          await sleep(wait * 1000 + 250);
+          continue;
+        }
+      } else if (res.status >= 500 && attempt < ATTEMPTS) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      console.error("[tg] error:", res.status, errText.slice(0, 300));
+      return false;
+    } catch (e) {
+      if (attempt < ATTEMPTS) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      console.error("[tg] send failed:", e);
       return false;
     }
-    return true;
-  } catch (e) {
-    console.error("[tg] send failed:", e);
-    return false;
   }
+  return false;
 }
 
 /** Post to the signals channel (TELEGRAM_SIGNALS_CHAT_ID, e.g. @apewisesignals). */
@@ -163,10 +212,12 @@ export function socialLinks(
   const parts: string[] = [];
   if (mint)
     parts.push(`📊 <a href="https://dexscreener.com/solana/${mint}">Chart</a>`);
-  if (socials?.website) parts.push(`🌐 <a href="${socials.website}">Website</a>`);
-  if (socials?.twitter) parts.push(`🐦 <a href="${socials.twitter}">X</a>`);
+  if (socials?.website)
+    parts.push(`🌐 <a href="${escapeHtml(socials.website)}">Website</a>`);
+  if (socials?.twitter)
+    parts.push(`🐦 <a href="${escapeHtml(socials.twitter)}">X</a>`);
   if (socials?.telegram)
-    parts.push(`💬 <a href="${socials.telegram}">Telegram</a>`);
+    parts.push(`💬 <a href="${escapeHtml(socials.telegram)}">Telegram</a>`);
   return parts.length ? parts.join("  ·  ") : null;
 }
 
@@ -222,10 +273,10 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
   // A KOL's real name is worth showing; generic/source labels aren't.
   const label =
     ev.label &&
-    !["smart", "active", "toppnl", "highwr", ev.segment].includes(
+    !["smart", "active", "toppnl", "highwr", "toptrader", ev.segment].includes(
       ev.label.toLowerCase(),
     )
-      ? ` <i>(${ev.label})</i>`
+      ? ` <i>(${escapeHtml(ev.label)})</i>`
       : "";
 
   // Headline: pick one of several distinct styles per event (stateless hash) so
@@ -240,7 +291,7 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     who,
     verb: verbs[hashIdx(seed + "#v", verbs.length)],
     amount: amount ?? "",
-    tok: `$${ev.token}`,
+    tok: `$${escapeHtml(ev.token)}`,
     mc: ev.marketCapUsd != null ? (fmtUsd(ev.marketCapUsd) ?? "") : "",
   };
   const styles = enabledAlertStyles();

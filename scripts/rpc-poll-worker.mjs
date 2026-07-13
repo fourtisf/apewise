@@ -18,6 +18,9 @@
  * Tunables (env / .env): SOLANA_RPC_URL, RPC_POLL_INTERVAL_SEC (default 30),
  * RPC_SIGS_PER_WALLET, RPC_CALL_DELAY_MS, RPC_MAX_AGE_MIN, RPC_MAX_WALLETS.
  */
+import { loadDotEnvLocal } from "./env.mjs";
+await loadDotEnvLocal(); // plain node doesn't read .env.local — only Next does
+
 const port = process.env.PORT || 3000;
 const secret = process.env.INGEST_SECRET || "";
 const intervalMs = (Number(process.env.RPC_POLL_INTERVAL_SEC) || 30) * 1000;
@@ -32,11 +35,15 @@ async function tick() {
   busy = true;
   try {
     const r = await fetch(url);
-    const j = await r.json();
-    if (j.ingested) {
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) {
+      console.error(
+        new Date().toISOString(),
+        `rpc-poll-worker: poll failed (${r.status})`,
+        j.error || "",
+      );
+    } else if (j.ingested) {
       console.log(new Date().toISOString(), `ingested ${j.ingested}/${j.found}`);
-    } else if (j.ok === false) {
-      console.error("rpc-poll-worker:", j.error || r.status);
     }
   } catch (e) {
     console.error("rpc-poll-worker:", e.message);

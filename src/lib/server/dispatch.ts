@@ -1,6 +1,6 @@
 import { getMarketSnapshot } from "./marketLive";
 import { getTokenSocials } from "./socials";
-import { postToChannel, fmtUsd, socialLinks } from "./alerts";
+import { postToChannel, fmtUsd, socialLinks, escapeHtml } from "./alerts";
 
 /**
  * Broadcast BIG market buys (>= ALERT_MIN_USD) from the live feed to the signals
@@ -35,7 +35,7 @@ export async function dispatchAlerts(): Promise<number> {
       ? await getTokenSocials(e.tokenMint).catch(() => undefined)
       : undefined;
     const lines = [
-      `🐋 <b>WHALE BUY</b> · <b>$${e.token}</b>`,
+      `🐋 <b>WHALE BUY</b> · <b>$${escapeHtml(e.token)}</b>`,
       `<a href="https://solscan.io/account/${e.wallet}">${e.walletShort}</a> bought <b>${fmtUsd(e.amountUsd)}</b>`,
       e.marketCapUsd != null ? `💰 MC ${fmtUsd(e.marketCapUsd)}` : null,
       e.tokenMint ? `<code>${e.tokenMint}</code>` : null,

@@ -41,6 +41,10 @@ export interface TweetConfig {
   // Copy
   styles: string[]; // enabled copy-style keys, rotated per tweet for variety
   whaleTag: string;
+  /** At/above this USD size the copy uses "whale" framing; below it, "smart
+   *  money" — a $1.5K buy announced as a whale reads as fake. Optional so
+   *  older config literals stay valid; buildTweet falls back to $25k. */
+  whaleUsd?: number;
   showWinRate: boolean;
   includeChartLink: boolean;
   suffix: string;
@@ -68,6 +72,10 @@ function bool(name: string, def: boolean): boolean {
  */
 export interface StyleParts {
   whaleTag: string;
+  /** Scale awareness: a $1.5K buy must never be announced as a "whale" or
+   *  "high-conviction" — that's what makes a feed read as fake. True only at or
+   *  above the whale threshold (TWEET_WHALE_USD). */
+  isWhale: boolean;
   amount: string; // "$210K"
   tok: string; // "$BONK"
   mc: string; // "$2.1B" or ""
@@ -76,7 +84,9 @@ export interface StyleParts {
 
 export const STYLE_MAP: Record<string, (p: StyleParts) => string> = {
   classic: (p) =>
-    `🐳 A ${p.whaleTag} just bought ${p.amount} of ${p.tok}` +
+    (p.isWhale
+      ? `🐳 A ${p.whaleTag} just bought ${p.amount} of ${p.tok}`
+      : `🟢 Smart money just bought ${p.amount} of ${p.tok}`) +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
   alert: (p) =>
@@ -84,10 +94,15 @@ export const STYLE_MAP: Record<string, (p: StyleParts) => string> = {
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
   punchy: (p) =>
-    `👀 A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped ${p.amount} into ${p.tok}` +
-    (p.mc ? ` (${p.mc} MC)` : ""),
+    `👀 ${
+      p.isWhale
+        ? `A ${p.wr ? `${p.wr}% win-rate ` : ""}whale just aped`
+        : "Smart money just aped"
+    } ${p.amount} into ${p.tok}` + (p.mc ? ` (${p.mc} MC)` : ""),
   conviction: (p) =>
-    `💎 High-conviction buy: ${p.amount} of ${p.tok}` +
+    (p.isWhale
+      ? `💎 High-conviction buy: ${p.amount} of ${p.tok}`
+      : `💎 Quiet accumulation: ${p.amount} of ${p.tok}`) +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% win-rate wallet` : ""),
   flow: (p) =>
@@ -95,11 +110,23 @@ export const STYLE_MAP: Record<string, (p: StyleParts) => string> = {
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? `. Wallet win-rate ${p.wr}%` : ""),
   fomo: (p) =>
-    `🔥 Whales are loading ${p.tok} — ${p.amount} buy` +
+    `🔥 ${p.isWhale ? "Whales are" : "Smart money is"} loading ${p.tok} — ${p.amount} buy` +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` from a ${p.wr}% win-rate wallet` : ""),
+  radar: (p) =>
+    `🎯 On the radar: ${p.tok} — ${p.isWhale ? "a whale" : "smart money"} added ${p.amount}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` · ${p.wr}% WR` : ""),
+  position: (p) =>
+    `💼 New position: ${p.amount} of ${p.tok} by a tracked ${p.isWhale ? "whale" : "wallet"}` +
+    (p.mc ? ` · ${p.mc} MC` : "") +
+    (p.wr ? ` · ${p.wr}% win-rate` : ""),
+  watch: (p) =>
+    `${p.isWhale ? "🐳 Whale watch" : "👀 Smart-money watch"}: ${p.amount} into ${p.tok}` +
+    (p.mc ? ` at ${p.mc} MC` : "") +
+    (p.wr ? ` · ${p.wr}% WR` : ""),
   minimal: (p) =>
-    `🐳 ${p.amount} → ${p.tok}` +
+    `${p.isWhale ? "🐳" : "🟢"} ${p.amount} → ${p.tok}` +
     (p.mc ? ` at ${p.mc} MC` : "") +
     (p.wr ? ` · ${p.wr}% WR` : ""),
 };
@@ -149,6 +176,7 @@ export function loadConfig(): TweetConfig {
     tokenCooldownMin: num("TWEET_TOKEN_COOLDOWN_MIN", moby ? 60 : 1440),
     styles: parseStyles(),
     whaleTag: process.env.TWEET_WHALE_TAG || "smart-money whale",
+    whaleUsd: num("TWEET_WHALE_USD", 25_000),
     showWinRate: bool("TWEET_SHOW_WINRATE", true),
     includeChartLink: bool("TWEET_INCLUDE_CHART_LINK", false),
     suffix: process.env.TWEET_SUFFIX || "",
@@ -194,6 +222,7 @@ export function buildTweet(
     cfg.showWinRate && quality?.observed && quality.winRate > 0
       ? quality.winRate
       : null;
+  const isWhale = ev.amountUsd >= (cfg.whaleUsd ?? 25_000);
 
   // Pick a style: explicit key wins; else the first enabled; else classic.
   const enabled = cfg.styles && cfg.styles.length ? cfg.styles : ["classic"];
@@ -203,7 +232,14 @@ export function buildTweet(
       : STYLE_MAP[enabled[0]]
         ? enabled[0]
         : "classic";
-  const line = STYLE_MAP[key]({ whaleTag: cfg.whaleTag, amount, tok, mc, wr });
+  const line = STYLE_MAP[key]({
+    whaleTag: cfg.whaleTag,
+    isWhale,
+    amount,
+    tok,
+    mc,
+    wr,
+  });
 
   let out = line;
   if (cfg.includeChartLink && ev.tokenMint) {

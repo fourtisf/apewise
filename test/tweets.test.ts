@@ -109,6 +109,18 @@ test("buildTweet: never exceeds 280 chars", () => {
   assert.ok(t.length <= 280);
 });
 
+test("buildTweet: scale-aware — small buys are never framed as whales", () => {
+  // A $1.5K buy announced as a "whale"/"high-conviction" reads as fake.
+  const small = ev({ amountUsd: 1500 });
+  assert.match(buildTweet(small, quality(), cfg(), "classic"), /^🟢 Smart money just bought \$1\.5K/);
+  assert.doesNotMatch(buildTweet(small, quality(), cfg(), "conviction"), /High-conviction/);
+  assert.doesNotMatch(buildTweet(small, quality(), cfg(), "fomo"), /Whales are/);
+  assert.doesNotMatch(buildTweet(small, quality(), cfg(), "punchy"), /whale/i);
+  // At/above the threshold the whale framing stays.
+  assert.match(buildTweet(ev({ amountUsd: 25000 }), quality(), cfg(), "classic"), /^🐳 A smart-money whale/);
+  assert.match(buildTweet(ev({ amountUsd: 79000 }), quality(), cfg(), "fomo"), /Whales are loading/);
+});
+
 test("buildTweet: each style renders distinct, valid copy", () => {
   const keys = ["classic", "alert", "punchy", "conviction", "flow", "fomo", "minimal"];
   const texts = keys.map((k) => buildTweet(ev(), quality(), cfg(), k));

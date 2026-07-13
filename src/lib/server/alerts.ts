@@ -189,7 +189,7 @@ const ALERT_STYLES: ((p: AlertParts) => string)[] = [
   (p) =>
     p.isBuy
       ? `💎 <b>Conviction buy</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b> of <b>${p.tok}</b>`
-      : `💰 <b>Taking profits</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b> of <b>${p.tok}</b>`,
+      : `🤑 <b>Taking profits</b> — ${p.who.toLowerCase()} ${p.verb} <b>${p.amount}</b> of <b>${p.tok}</b>`,
   // 9 · minimal
   (p) =>
     `${p.emoji} <b>${p.tok}</b> · <b>${p.amount}</b> ${p.isBuy ? "buy" : "sell"}`,

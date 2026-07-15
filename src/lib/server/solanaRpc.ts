@@ -180,12 +180,11 @@ export function activeRpcUrl(): string {
   return urls[rpcIdx % urls.length];
 }
 
-/** Rotate to the next configured endpoint (no-op with a single URL). */
+/** Advance to the next configured endpoint (no-op with a single URL). */
 function rotateRpc(): void {
   const urls = rpcUrls();
   if (urls.length < 2) return;
   rpcIdx = (rpcIdx + 1) % urls.length;
-  console.warn(`[rpc-poll] switching RPC endpoint → ${activeRpcUrl()}`);
 }
 
 async function rpc<T>(method: string, params: unknown[]): Promise<T | null> {
@@ -257,6 +256,13 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   } else {
     wallets = wallets.slice(0, windowSize);
   }
+
+  // Round-robin: advance one endpoint per cycle so each provider only sees
+  // 1/N of the poll traffic — N endpoints ≈ N× the free-tier headroom, which
+  // is what actually keeps a keyless/free setup under rate limits. The
+  // throttle rotation below still applies on top. RPC_ROUND_ROBIN=false pins
+  // each cycle to the current endpoint (pure failover behavior).
+  if (process.env.RPC_ROUND_ROBIN !== "false") rotateRpc();
 
   const { getSolPriceUsd } = await import("./market");
   const solPrice = await getSolPriceUsd();

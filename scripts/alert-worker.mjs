@@ -28,6 +28,6 @@ async function tick() {
   }
 }
 
-console.log(`ApeWise alert worker → ${url} every ${intervalMs / 1000}s`);
+console.log(`ApeWise alert worker → ${url.replace(/secret=[^&]+/, "secret=***")} every ${intervalMs / 1000}s`);
 tick();
 setInterval(tick, intervalMs);

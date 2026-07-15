@@ -240,3 +240,60 @@ tick* posts at all. See `.env.example` for every knob.
 > The tweet gate is intentionally **much stricter** than the Telegram alert gate —
 > Telegram is a firehose for subscribers; the public timeline is curated so the
 > account reads as high-signal, which is what keeps its reach healthy.
+
+---
+
+## Runbook — the bot went quiet (no TG posts, no tweets)
+
+Both channels share one upstream: **ingested swap events**. If ingestion dies,
+Telegram *and* X stop together. If only one channel stops, its credentials/caps
+died. Diagnose in one command **on the server**:
+
+```bash
+node scripts/doctor.mjs        # checks every link end-to-end, prints ❌ + the fix
+```
+
+It verifies: wallet files → Helius webhook state (registered? address list in
+sync? authHeader = INGEST_SECRET?) → RPC reachability/throttling → data
+freshness (`events.jsonl` / `tweets.jsonl`) → Telegram token + channel admin
+rights → X credentials (401/403 = dead keys, 429 UsageCap = monthly cap) → the
+running app's `/api/health` verdict.
+
+**The usual suspects, most common first:**
+
+1. **Webhook/wallet drift** — `source-wallets.mjs` rewrote
+   `data/tracked-wallets.json` but the Helius webhook still watches the *old*
+   addresses → every delivery is filtered out (`parsed=0`). `source-wallets`
+   now auto-syncs the webhook when `HELIUS_API_KEY`+`WEBHOOK_URL` are set;
+   otherwise re-run `node scripts/setup-helius-webhook.mjs` after re-sourcing.
+2. **Public RPC throttling (Mode B)** — `api.mainnet-beta.solana.com`
+   429-blocks VPS IPs; every poll silently returns nothing. Set
+   `SOLANA_RPC_URLS` (comma list) — the poller now rotates endpoints when a
+   whole cycle fails, and `/api/health` reports `rpc-dead`.
+3. **X keys/caps** — regenerated keys, app suspended, tokens created before
+   Read+Write, or the **monthly post cap** (free tier ≈ 500 posts/mo — Moby
+   mode can burn that in a day or two, then every post 429s until the month
+   resets). Now surfaced as `x-auth-failed` / `x-usage-capped` in `/api/health`
+   instead of being silently swallowed.
+4. **Telegram rights** — bot demoted / kicked from the channel, or a revoked
+   token: sends fail with 401/403. Now tracked (`telegram-failing`), and flood
+   control (429) is retried with the API's `retry_after`.
+5. **Empty wallet set** — all sources failed and the data files are gone;
+   nothing can be detected. Now logged loudly + flagged `wallets-empty`.
+6. **Env changed but PM2 kept the old env** — after editing `.env`, restart
+   with `pm2 restart apewise --update-env` (a plain `reload` keeps old env).
+
+**So it never happens silently again**, run the watchdog worker — it polls
+`GET /api/health` and DMs you on Telegram the moment the pipeline degrades
+(and again when it recovers):
+
+```bash
+# .env: TELEGRAM_ADMIN_CHAT_ID=<your chat id with the bot>   (ask @userinfobot)
+pm2 start scripts/watchdog.mjs --name apewise-watchdog && pm2 save
+```
+
+`GET /api/health?secret=$INGEST_SECRET` returns
+`{ status: ok|degraded|stalled, problems: [...], health: {...} }` with per-stage
+counters (ingest heartbeat, wallet count, RPC cycle stats, TG/X success/failure
+streaks + last error, tweet-dispatch pool/block reason) — see
+`src/lib/server/health.ts`.

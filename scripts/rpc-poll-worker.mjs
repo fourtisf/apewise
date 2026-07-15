@@ -18,6 +18,9 @@
  * Tunables (env / .env): SOLANA_RPC_URL, RPC_POLL_INTERVAL_SEC (default 30),
  * RPC_SIGS_PER_WALLET, RPC_CALL_DELAY_MS, RPC_MAX_AGE_MIN, RPC_MAX_WALLETS.
  */
+import { loadEnv } from "./lib/env.mjs";
+await loadEnv(); // pick up INGEST_SECRET etc. from .env.local/.env like the app
+
 const port = process.env.PORT || 3000;
 const secret = process.env.INGEST_SECRET || "";
 const intervalMs = (Number(process.env.RPC_POLL_INTERVAL_SEC) || 30) * 1000;

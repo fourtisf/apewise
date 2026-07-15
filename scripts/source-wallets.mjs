@@ -29,45 +29,13 @@
  * cycle), so a few hundred tracked wallets is fine — bump the limits above.
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { loadEnv } from "./lib/env.mjs";
 
-/**
- * Load .env.local into process.env (plain `node` doesn't read it — only Next
- * does). Without this, BIRDEYE_API_KEY / SOLANATRACKER_API_KEY live in
- * .env.local but are invisible here, so those sources silently no-op and we can
- * end up sourcing zero wallets. Existing env vars win, so an inline override
- * still takes effect.
- */
-async function loadDotEnvLocal() {
-  let txt = "";
-  try {
-    txt = await readFile(new URL("../.env.local", import.meta.url), "utf8");
-  } catch {
-    try {
-      txt = await readFile(".env.local", "utf8"); // fallback: cwd
-    } catch {
-      return;
-    }
-  }
-  for (const raw of txt.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq === -1) continue;
-    const key = line.slice(0, eq).trim();
-    let val = line.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    } else {
-      const hash = val.indexOf(" #"); // strip an unquoted inline comment
-      if (hash !== -1) val = val.slice(0, hash).trim();
-    }
-    if (process.env[key] === undefined) process.env[key] = val;
-  }
-}
-await loadDotEnvLocal();
+// Load .env.local + .env (plain `node` doesn't read them — only Next does).
+// Without this, BIRDEYE_API_KEY / SOLANATRACKER_API_KEY live in .env.local but
+// are invisible here, so those sources silently no-op and we can end up
+// sourcing zero wallets. Existing env vars win, so inline overrides still work.
+await loadEnv();
 
 const walletsFile = process.env.SMART_WALLETS_FILE || "data/smart-wallets.json";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -392,12 +360,88 @@ if (tracked.length === 0) {
   process.exit(1);
 }
 
+// Overwriting a rich set with a suddenly-thin one usually means the sources
+// are failing (keys expired, 429s) — say so before shrinking coverage.
+let prevCount = 0;
+try {
+  prevCount = JSON.parse(await readFile("data/tracked-wallets.json", "utf8")).length;
+} catch {
+  /* no previous set */
+}
+if (prevCount >= 20 && tracked.length < prevCount / 2) {
+  console.warn(
+    `⚠ Freshly-sourced set (${tracked.length}) is under half the previous one (${prevCount}) — ` +
+      "check the source warnings above before trusting this run.",
+  );
+}
+
 await mkdir("data", { recursive: true }).catch(() => {});
 await writeFile("data/tracked-wallets.json", JSON.stringify(tracked, null, 2));
 console.log(
   `\n✓ Wrote data/tracked-wallets.json — ${tracked.length} wallets ` +
     `(winrate ${stracker.length}, pnl ${birdeye.length}, toptrader ${bdtop.length}, active ${active.length}, gmgn ${gmgn.length}, manual ${manual.length}).`,
 );
+
+// ── Keep the Helius webhook in sync (webhook-mode only) ───────────────────────
+// Rewriting tracked-wallets.json while the Helius webhook still watches the OLD
+// address list is the classic silent killer: deliveries keep coming for wallets
+// walletMap() no longer recognizes (parsed=0), the new wallets are never
+// watched at all, and BOTH channels go quiet with zero errors. So when the
+// webhook env is configured, sync it here — same idempotent update as
+// scripts/setup-helius-webhook.mjs.
+const heliusKey = process.env.HELIUS_API_KEY;
+const webhookURL = process.env.WEBHOOK_URL;
+if (heliusKey && webhookURL) {
+  try {
+    const list = await fetch(
+      `https://api.helius.xyz/v0/webhooks?api-key=${heliusKey}`,
+    );
+    const hooks = list.ok ? await list.json() : [];
+    const keep = (Array.isArray(hooks) ? hooks : []).find(
+      (w) => w.webhookURL === webhookURL,
+    );
+    if (!keep) {
+      console.warn(
+        `⚠ No Helius webhook registered for ${webhookURL} — run: node scripts/setup-helius-webhook.mjs`,
+      );
+    } else {
+      const res = await fetch(
+        `https://api.helius.xyz/v0/webhooks/${keep.webhookID}?api-key=${heliusKey}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            webhookURL,
+            transactionTypes: ["SWAP"],
+            accountAddresses: tracked.map((w) => w.address),
+            webhookType: "enhanced",
+            ...(process.env.INGEST_SECRET
+              ? { authHeader: process.env.INGEST_SECRET }
+              : {}),
+          }),
+        },
+      );
+      if (res.ok) {
+        console.log(`✓ Synced Helius webhook ${keep.webhookID} to the new set (${tracked.length} addresses)`);
+      } else {
+        console.warn(
+          `⚠ Helius webhook sync failed (HTTP ${res.status}): ${(await res.text()).slice(0, 200)}\n` +
+            "  The webhook still watches the OLD wallet set — run: node scripts/setup-helius-webhook.mjs",
+        );
+      }
+    }
+  } catch (e) {
+    console.warn(
+      `⚠ Helius webhook sync failed: ${e.message} — run: node scripts/setup-helius-webhook.mjs`,
+    );
+  }
+} else if (heliusKey) {
+  console.warn(
+    "⚠ HELIUS_API_KEY is set but WEBHOOK_URL is not — if you use webhook ingest, " +
+      "re-register it now: node scripts/setup-helius-webhook.mjs",
+  );
+}
+
 console.log(
   "Restart so the workers pick up the set:  pm2 restart apewise apewise-rpc",
 );

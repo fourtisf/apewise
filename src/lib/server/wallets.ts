@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { noteWalletCount } from "./health";
 
 export type Segment = "smart" | "sniper" | "insider" | "kol";
 
@@ -77,6 +78,16 @@ export async function getSmartWallets(): Promise<SmartWallet[]> {
 
   cache = [...map.values()];
   cachedAt = now;
+  noteWalletCount(cache.length);
+  if (cache.length === 0) {
+    // With zero wallets, NOTHING can be detected → both channels go quiet.
+    // Say so loudly; /api/health flags it as stalled and the watchdog alerts.
+    console.error(
+      "[wallets] tracked-wallet set is EMPTY (no data/smart-wallets.json, " +
+        "no data/tracked-wallets.json, live sources returned nothing) — " +
+        "no swaps can be detected. Run: node scripts/source-wallets.mjs",
+    );
+  }
   return cache;
 }
 

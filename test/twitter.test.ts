@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { pctEncode, oauth1Header } from "../src/lib/server/twitter.ts";
+import {
+  pctEncode,
+  oauth1Header,
+  classifyTweetFailure,
+} from "../src/lib/server/twitter.ts";
 
 test("pctEncode: RFC 3986 (encodeURIComponent + !*'())", () => {
   assert.equal(pctEncode("a b"), "a%20b");
@@ -62,4 +66,44 @@ test("oauth1Header: secrets with reserved chars are percent-encoded in the signi
   });
   assert.match(header, /oauth_signature="[^"]+"/);
   assert.match(header, /oauth_consumer_key="c%20k"/);
+});
+
+test("classifyTweetFailure: duplicate beats status code", () => {
+  // X reports duplicate content as 403 — must NOT be mistaken for dead keys.
+  const r = classifyTweetFailure(403, '{"detail":"You are not allowed to create a Tweet with duplicate content."}');
+  assert.equal(r.duplicate, true);
+  assert.equal(r.authFailed, undefined);
+  assert.equal(r.error, "duplicate");
+});
+
+test("classifyTweetFailure: plain 429 is transient rate-limit", () => {
+  const r = classifyTweetFailure(429, '{"title":"Too Many Requests"}');
+  assert.equal(r.rateLimited, true);
+  assert.equal(r.capped, undefined);
+  assert.equal(r.error, "rate-limited");
+});
+
+test("classifyTweetFailure: monthly usage cap is flagged as capped", () => {
+  const r = classifyTweetFailure(
+    429,
+    '{"title":"UsageCapExceeded","period":"Monthly","scope":"Product"}',
+  );
+  assert.equal(r.capped, true);
+  assert.equal(r.rateLimited, true);
+  assert.equal(r.error, "usage-capped");
+});
+
+test("classifyTweetFailure: 401/403 without duplicate detail = dead credentials", () => {
+  assert.equal(classifyTweetFailure(401, "Unauthorized").authFailed, true);
+  assert.equal(classifyTweetFailure(401, "Unauthorized").error, "auth-401");
+  const forbidden = classifyTweetFailure(403, '{"detail":"Forbidden"}');
+  assert.equal(forbidden.authFailed, true);
+  assert.equal(forbidden.error, "auth-403");
+});
+
+test("classifyTweetFailure: other statuses pass through", () => {
+  const r = classifyTweetFailure(500, "oops");
+  assert.equal(r.error, "http-500");
+  assert.equal(r.authFailed, undefined);
+  assert.equal(r.rateLimited, undefined);
 });

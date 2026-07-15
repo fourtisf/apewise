@@ -143,9 +143,36 @@ export function parseRpcSwap(
   };
 }
 
+/**
+ * RPC endpoints, in preference order. SOLANA_RPC_URLS (comma list) enables
+ * automatic failover: when a whole poll cycle fails (public mainnet-beta
+ * aggressively 429s datacenter IPs — the classic way this pipeline silently
+ * dies), we rotate to the next endpoint instead of returning [] forever.
+ * Falls back to SOLANA_RPC_URL, then the public endpoint.
+ */
+function rpcUrls(): string[] {
+  const multi = (process.env.SOLANA_RPC_URLS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (multi.length) return multi;
+  return [process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com"];
+}
+
+let rpcIdx = 0;
+
 /** Read fresh each call so the active RPC always reflects current env. */
 export function activeRpcUrl(): string {
-  return process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+  const urls = rpcUrls();
+  return urls[rpcIdx % urls.length];
+}
+
+/** Rotate to the next configured endpoint (no-op with a single URL). */
+function rotateRpc(): void {
+  const urls = rpcUrls();
+  if (urls.length < 2) return;
+  rpcIdx = (rpcIdx + 1) % urls.length;
+  console.warn(`[rpc-poll] switching RPC endpoint → ${activeRpcUrl()}`);
 }
 
 async function rpc<T>(method: string, params: unknown[]): Promise<T | null> {
@@ -229,16 +256,30 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   const lookbackMs = (Number(process.env.RPC_LOOKBACK_MIN) || 20) * 60_000;
   const out: SmartEvent[] = [];
 
+  // Cycle stats: when EVERY call in a cycle fails the endpoint is throttled or
+  // down — rotate to the next configured RPC and surface it via /api/health
+  // instead of silently returning [] forever (which reads as "bot stopped").
+  let calls = 0;
+  let fails = 0;
+  const trackedRpc = async <T>(
+    method: string,
+    params: unknown[],
+  ): Promise<T | null> => {
+    calls++;
+    const r = await rpc<T>(method, params);
+    if (r === null) fails++;
+    return r;
+  };
+
   for (const wallet of wallets) {
     const w = wallet.address;
-    const sigs = await rpc<SigInfo[]>("getSignaturesForAddress", [
+    const sigs = await trackedRpc<SigInfo[]>("getSignaturesForAddress", [
       w,
       { limit: perWallet },
     ]);
     await delay(callDelay);
     if (!sigs || !sigs.length) continue;
 
-    const newest = sigs[0].signature;
     const firstSight = !initialized.has(w);
     initialized.add(w);
     const prevSeen = seen.get(w);
@@ -248,26 +289,54 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
       if (prevSeen && s.signature === prevSeen) break; // caught up to cursor
       fresh.push(s);
     }
-    seen.set(w, newest);
     if (!fresh.length) continue;
 
     // Oldest-first so the feed ordering is chronological within the batch.
+    // Advance the cursor only PAST signatures we actually processed: a failed
+    // getTransaction (throttled RPC) stops this wallet's scan so the same
+    // signature is retried next cycle. The old code jumped the cursor to
+    // `newest` up front, so every fetch failure permanently skipped that swap —
+    // under sustained throttling that silently dropped ALL events. A signature
+    // that keeps failing ages past RPC_MAX_AGE_MIN and is skipped, so one
+    // poison tx can't wedge the wallet forever.
+    let cursor = prevSeen;
     for (const s of fresh.reverse()) {
-      if (s.err) continue;
       // First sight: only the recent lookback window. Ongoing: cursor bounds it,
       // with a generous staleness guard.
       const ageMs = s.blockTime ? Date.now() - s.blockTime * 1000 : 0;
-      if (ageMs > (firstSight ? lookbackMs : maxAgeMs)) continue;
-      const tx = await rpc<RpcTx>("getTransaction", [
+      if (s.err || ageMs > (firstSight ? lookbackMs : maxAgeMs)) {
+        cursor = s.signature; // nothing to fetch — safe to move past it
+        continue;
+      }
+      const tx = await trackedRpc<RpcTx>("getTransaction", [
         s.signature,
         { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" },
       ]);
       await delay(callDelay);
-      if (!tx) continue;
+      if (!tx) break; // fetch failed — retry from this signature next cycle
+      cursor = s.signature;
       const ev = parseRpcSwap(tx, wallet, solPrice);
       if (ev) out.push(ev);
     }
+    if (cursor) seen.set(w, cursor);
   }
+
+  const allFailed = calls > 0 && fails >= calls;
+  if (allFailed) {
+    console.warn(
+      `[rpc-poll] every RPC call failed this cycle (${fails}/${calls} via ${activeRpcUrl()}) — throttled or down`,
+    );
+  }
+  // Heartbeat for /api/health (dynamic import keeps the pure parser testable
+  // under node --test, same as ./wallets and ./market above). Fail-soft.
+  try {
+    const { noteRpcCycle, noteWalletCount } = await import("./health");
+    noteRpcCycle({ url: activeRpcUrl(), calls, fails });
+    noteWalletCount(total);
+  } catch {
+    /* health module unavailable (unit tests) */
+  }
+  if (allFailed) rotateRpc();
 
   return out;
 }

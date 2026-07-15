@@ -5,6 +5,7 @@ import type { WalletQuality } from "./walletQuality";
 import { walletQualityMap } from "./walletQuality";
 import { postTweet, twitterConfigured } from "./twitter";
 import { postToChannel, socialLinks } from "./alerts";
+import { noteTwitter, noteTweetDispatch } from "./health";
 import {
   loadConfig,
   buildTweet,
@@ -47,12 +48,21 @@ async function ensureLoaded() {
   loaded = true;
   try {
     const txt = await fs.readFile(TWEETS_FILE, "utf8");
+    // Per-line parse: one corrupt line (torn write during a crash) must not
+    // void the WHOLE rate-limit history — that would reset spacing/caps and
+    // let a restart re-tweet recent events as a burst.
     posted = txt
       .trim()
       .split("\n")
       .filter(Boolean)
       .slice(-KEEP)
-      .map((l) => JSON.parse(l) as PostedTweet);
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as PostedTweet];
+        } catch {
+          return [];
+        }
+      });
     postedIds = new Set(posted.map((p) => p.eventId));
   } catch {
     /* no file yet */
@@ -193,12 +203,16 @@ async function runDispatch(): Promise<DispatchResult> {
   const ttl = cfg.candidateTtlMin * 60_000;
   for (const [id, c] of pool)
     if (now - c.at > ttl || postedIds.has(id)) pool.delete(id);
-  if (pool.size === 0) return { posted: 0, considered: 0 };
+  if (pool.size === 0) {
+    noteTweetDispatch({ poolSize: 0 });
+    return { posted: 0, considered: 0 };
+  }
 
   // Global pacing — if we're inside any window cap, post nothing this tick.
   const gate = globalRateGate(posted, now, cfg);
   if (!gate.ok) {
     console.log(`[tweet] paced (${gate.reason}); pool=${pool.size}`);
+    noteTweetDispatch({ blocked: gate.reason, poolSize: pool.size });
     return { posted: 0, considered: pool.size, blocked: gate.reason };
   }
 
@@ -213,7 +227,10 @@ async function runDispatch(): Promise<DispatchResult> {
     if (conv < cfg.minConviction) continue;
     ranked.push({ ev, q, conv });
   }
-  if (ranked.length === 0) return { posted: 0, considered: pool.size };
+  if (ranked.length === 0) {
+    noteTweetDispatch({ blocked: "no-candidate-cleared-gate", poolSize: pool.size });
+    return { posted: 0, considered: pool.size };
+  }
 
   ranked.sort((a, b) => b.conv - a.conv);
   const best = ranked[0];
@@ -243,6 +260,8 @@ async function runDispatch(): Promise<DispatchResult> {
     console.log(
       `[tweet] posted (conv=${best.conv}) $${best.ev.token} ${res.id ?? ""}`.trim(),
     );
+    noteTwitter(true);
+    noteTweetDispatch({ posted: 1, poolSize: pool.size });
     return { posted: 1, considered: pool.size };
   }
 
@@ -250,8 +269,15 @@ async function runDispatch(): Promise<DispatchResult> {
   // once keys land; drop the preview so we don't re-log it forever.
   if (res.dryRun) {
     pool.delete(best.ev.id);
+    noteTweetDispatch({ blocked: "no-keys", poolSize: pool.size });
     return { posted: 0, considered: pool.size, blocked: "no-keys" };
   }
+
+  noteTwitter(false, {
+    error: res.error,
+    authFailed: res.authFailed,
+    capped: res.capped,
+  });
 
   // Duplicate content: consume it and set cooldowns so we don't retry the pair.
   if (res.duplicate) {
@@ -263,12 +289,18 @@ async function runDispatch(): Promise<DispatchResult> {
       tokenMint: best.ev.tokenMint,
       token: best.ev.token,
     });
+    noteTweetDispatch({ blocked: "duplicate", poolSize: pool.size });
     return { posted: 0, considered: pool.size, blocked: "duplicate" };
   }
 
-  // Rate-limited by X → keep the candidate and back off (our own spacing gate
-  // will throttle the retry). Any other error → drop it so it can't wedge.
-  if (!res.rateLimited) pool.delete(best.ev.id);
+  // Rate-limited/capped by X, or auth is dead → KEEP the candidate. Rate limits
+  // clear on their own; auth failures clear when the operator fixes the keys —
+  // and if that happens within the candidate TTL, posting resumes with no gap.
+  // (Auth failures used to silently DROP every candidate forever — the exact
+  // "bot stopped tweeting with no error anywhere" failure mode.)
+  // Any other error → drop it so a poisoned candidate can't wedge the channel.
+  if (!res.rateLimited && !res.authFailed) pool.delete(best.ev.id);
+  noteTweetDispatch({ blocked: res.error, poolSize: pool.size });
   return { posted: 0, considered: pool.size, blocked: res.error };
 }
 

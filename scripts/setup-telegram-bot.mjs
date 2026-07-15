@@ -8,6 +8,9 @@
  *   TELEGRAM_WEBHOOK_SECRET=some-random-string \
  *   node scripts/setup-telegram-bot.mjs
  */
+import { loadEnv } from "./lib/env.mjs";
+await loadEnv(); // pick up TELEGRAM_* from .env.local/.env like the app
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const site =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "https://apewise.ai";

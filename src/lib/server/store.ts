@@ -57,12 +57,20 @@ async function ensureLoaded() {
   loaded = true;
   try {
     const txt = await fs.readFile(FILE, "utf8");
+    // Per-line parse: one corrupt line (torn write during a crash) must not
+    // void the WHOLE history — losing `seen` would re-alert old events.
     const parsed = txt
       .trim()
       .split("\n")
       .filter(Boolean)
       .slice(-MAX)
-      .map((l) => JSON.parse(l) as SmartEvent);
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as SmartEvent];
+        } catch {
+          return [];
+        }
+      });
     buffer = parsed.reverse();
     seen = new Set(buffer.map((e) => e.id));
   } catch {

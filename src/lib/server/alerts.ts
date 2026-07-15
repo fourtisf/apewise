@@ -1,6 +1,16 @@
 import type { SmartEvent } from "./store";
+import { noteTelegram } from "./health";
 
-/** Low-level Telegram sendMessage to any chat. No-op (logs) without a token. */
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Low-level Telegram sendMessage to any chat. No-op (logs) without a token.
+ * Honors Telegram flood control: on 429 it waits the API-provided retry_after
+ * (capped) and retries once, so a burst of alerts doesn't silently lose the
+ * tail. Non-retryable failures (revoked token = 401, bot kicked from the
+ * channel = 403, wrong chat id = 400) are logged with the API's description —
+ * they need an operator, and the watchdog surfaces them via /api/health.
+ */
 export async function tgSend(
   chatId: string | number,
   text: string,
@@ -11,8 +21,8 @@ export async function tgSend(
     console.log(`[tg] (no token)\n${text}`);
     return false;
   }
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const send = () =>
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -23,8 +33,19 @@ export async function tgSend(
         ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       }),
     });
+  try {
+    let res = await send();
+    if (res.status === 429) {
+      const body = (await res.json().catch(() => null)) as {
+        parameters?: { retry_after?: number };
+      } | null;
+      const wait = Math.min(Number(body?.parameters?.retry_after) || 3, 15);
+      console.warn(`[tg] flood control (429) — retrying in ${wait}s`);
+      await delay(wait * 1000);
+      res = await send();
+    }
     if (!res.ok) {
-      console.error("[tg] error:", await res.text());
+      console.error("[tg] error:", res.status, await res.text());
       return false;
     }
     return true;
@@ -44,7 +65,13 @@ export async function postToChannel(
     console.log(`[tg] (no channel)\n${text}`);
     return false;
   }
-  return tgSend(chatId, text, replyMarkup);
+  const ok = await tgSend(chatId, text, replyMarkup);
+  // Channel-posting health only (bot command replies don't belong here), and
+  // only when a token is configured — an unconfigured dry-run isn't a failure.
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    noteTelegram(ok, ok ? undefined : "sendMessage to signals channel failed — see [tg] log");
+  }
+  return ok;
 }
 
 export function fmtUsd(n?: number): string | null {
@@ -172,17 +199,29 @@ export function socialLinks(
 
 const lastAlertAt = new Map<string, number>(); // per wallet+token
 const lastWalletAt = new Map<string, number>(); // per wallet (any token)
-const COOLDOWN = (Number(process.env.ALERT_COOLDOWN_SEC) || 60) * 1000;
+
+// Env number with a default that an EXPLICIT 0 can override — `Number(x) || def`
+// silently turns "ALERT_MIN_USD=0" back into the default, which reads as "my
+// setting does nothing".
+function envNum(name: string, def: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw === "") return def;
+  const v = Number(raw);
+  return Number.isFinite(v) ? v : def;
+}
+
+const COOLDOWN = envNum("ALERT_COOLDOWN_SEC", 60) * 1000;
 // Per-wallet cooldown: one wallet dumping several tokens in one cycle should not
 // post a wall of near-identical alerts (reads as "double"). 0 disables.
-const WALLET_COOLDOWN =
-  (process.env.ALERT_WALLET_COOLDOWN_SEC == null
-    ? 90
-    : Number(process.env.ALERT_WALLET_COOLDOWN_SEC)) * 1000;
+const WALLET_COOLDOWN = envNum("ALERT_WALLET_COOLDOWN_SEC", 90) * 1000;
 // Floor on alert size — applies to BUYS AND SELLS so dust swaps (a $25 sell)
 // never spam the channel. This is what makes it read as a signal, not a feed.
-const MIN_USD = Number(process.env.ALERT_MIN_USD) || 1000;
+// 0 disables the floor (post everything).
+const MIN_USD = envNum("ALERT_MIN_USD", 1000);
 
+// Pure check — cooldowns are consumed in sendAlert only AFTER a successful
+// post, so a failed Telegram send doesn't burn the wallet/token cooldown and
+// suppress the next real alert on top of the one that was already lost.
 function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (ev.risk?.verdict === "risk" && process.env.ALERT_ON_RISK !== "true") {
     return { ok: false, reason: "risk-suppressed" };
@@ -204,9 +243,13 @@ function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (now - (lastAlertAt.get(key) || 0) < COOLDOWN) {
     return { ok: false, reason: "cooldown" };
   }
-  lastAlertAt.set(key, now);
-  lastWalletAt.set(ev.wallet, now);
   return { ok: true };
+}
+
+function consumeCooldowns(ev: SmartEvent): void {
+  const now = Date.now();
+  lastAlertAt.set(`${ev.wallet}:${ev.tokenMint || ev.token}`, now);
+  lastWalletAt.set(ev.wallet, now);
 }
 
 /** Smart-money alert (tracked-wallet swap via Helius) → signals channel. */
@@ -262,5 +305,5 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     socialLinks(ev.tokenMint, ev.socials),
   ].filter(Boolean) as string[];
 
-  await postToChannel(lines.join("\n"));
+  if (await postToChannel(lines.join("\n"))) consumeCooldowns(ev);
 }

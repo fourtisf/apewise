@@ -25,7 +25,36 @@ export interface TweetResult {
   duplicate?: boolean;
   /** True when X rate-limited us (HTTP 429) — back off. */
   rateLimited?: boolean;
+  /** True when the MONTHLY usage cap is exhausted — dead until it resets. */
+  capped?: boolean;
+  /** True when X rejected the credentials (401/403) — dead until keys are fixed. */
+  authFailed?: boolean;
   error?: string;
+}
+
+/**
+ * Map an X error response to a structured failure. Pure — unit-testable. The
+ * distinctions matter operationally: a plain 429 is transient (back off and
+ * retry), but a 429 whose body says "UsageCapExceeded" is the MONTHLY post cap
+ * (e.g. free tier ≈500 posts/mo — Moby-mode pacing can burn that in a day or
+ * two) and no amount of retrying will post until the calendar month resets.
+ * 401/403 means the keys themselves are dead (regenerated, app suspended, or
+ * write permission lost) and a human must fix them — both used to be silently
+ * swallowed, which is exactly how the bot "stops tweeting" with no signal.
+ */
+export function classifyTweetFailure(
+  status: number,
+  body: string,
+): Omit<TweetResult, "ok" | "id" | "dryRun"> {
+  if (/duplicate/i.test(body)) return { duplicate: true, error: "duplicate" };
+  if (status === 429) {
+    if (/usage.?cap/i.test(body))
+      return { capped: true, rateLimited: true, error: "usage-capped" };
+    return { rateLimited: true, error: "rate-limited" };
+  }
+  if (status === 401 || status === 403)
+    return { authFailed: true, error: `auth-${status}` };
+  return { error: `http-${status}` };
 }
 
 interface OAuthCreds {
@@ -154,17 +183,22 @@ export async function postTweet(text: string): Promise<TweetResult> {
     }
 
     const body = await res.text().catch(() => "");
-    if (res.status === 429) {
+    const failure = classifyTweetFailure(res.status, body);
+    if (failure.duplicate) console.warn("[x] duplicate content — skipping");
+    else if (failure.capped)
+      console.error(
+        "[x] MONTHLY USAGE CAP EXHAUSTED — posting is dead until the cap resets:",
+        body.slice(0, 200),
+      );
+    else if (failure.rateLimited)
       console.warn("[x] rate limited (429):", body.slice(0, 200));
-      return { ok: false, rateLimited: true, error: "rate-limited" };
-    }
-    // X returns 403 with a duplicate-content detail for repeat text.
-    if (/duplicate/i.test(body)) {
-      console.warn("[x] duplicate content — skipping");
-      return { ok: false, duplicate: true, error: "duplicate" };
-    }
-    console.error(`[x] post failed ${res.status}:`, body.slice(0, 300));
-    return { ok: false, error: `http-${res.status}` };
+    else if (failure.authFailed)
+      console.error(
+        `[x] AUTH FAILED (${res.status}) — keys revoked/suspended or missing write permission:`,
+        body.slice(0, 300),
+      );
+    else console.error(`[x] post failed ${res.status}:`, body.slice(0, 300));
+    return { ok: false, ...failure };
   } catch (e) {
     console.error("[x] post error:", e);
     return { ok: false, error: "network" };

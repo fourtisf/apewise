@@ -6,6 +6,9 @@
  *
  *   pm2 start scripts/alert-worker.mjs --name apewise-alerts && pm2 save
  */
+import { loadEnv } from "./lib/env.mjs";
+await loadEnv(); // pick up INGEST_SECRET etc. from .env.local/.env like the app
+
 const port = process.env.PORT || 3000;
 const secret = process.env.INGEST_SECRET || "";
 const intervalMs = (Number(process.env.ALERT_INTERVAL_SEC) || 60) * 1000;
@@ -18,6 +21,8 @@ async function tick() {
     const r = await fetch(url);
     const j = await r.json();
     if (j.posted) console.log(new Date().toISOString(), "posted", j.posted);
+    else if (!r.ok || j.ok === false)
+      console.error("alert-worker: dispatch failed", r.status, j.error || "");
   } catch (e) {
     console.error("alert-worker:", e.message);
   }

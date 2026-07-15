@@ -8,6 +8,7 @@ import { addEvents } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
 import { enqueueForTweet } from "@/lib/server/tweets";
+import { noteIngest } from "@/lib/server/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +68,7 @@ export async function GET(req: Request) {
   } catch (e) {
     console.error("[rpc-poll] enqueueForTweet failed:", e);
   }
+  noteIngest("rpc-poll", fresh.length);
 
   return NextResponse.json({ ok: true, found: parsed.length, ingested: fresh.length });
 }

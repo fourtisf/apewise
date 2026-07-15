@@ -13,6 +13,13 @@
  * Manage/delete webhooks later in the Helius dashboard.
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { loadEnv } from "./lib/env.mjs";
+
+// Load .env.local/.env first. Without this, re-running the script from a bare
+// shell registered the webhook with NO authHeader (INGEST_SECRET lives in
+// .env.local, invisible to plain node) — and every Helius delivery then bounced
+// off /api/ingest/helius with 401 while looking "successfully registered" here.
+await loadEnv();
 
 const apiKey = process.env.HELIUS_API_KEY;
 const webhookURL = process.env.WEBHOOK_URL;

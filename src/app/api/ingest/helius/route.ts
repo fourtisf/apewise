@@ -9,6 +9,7 @@ import { addEvents, type SmartEvent } from "@/lib/server/store";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
 import { enqueueForTweet } from "@/lib/server/tweets";
+import { noteIngest } from "@/lib/server/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
   }
 
   // Observability: shows whether Helius is delivering + whether swaps parse.
+  noteIngest("helius", fresh.length);
   console.log(
     `[helius] rx=${txs.length} parsed=${parsed.length} ingested=${fresh.length}`,
   );

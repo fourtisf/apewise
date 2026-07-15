@@ -4,6 +4,7 @@ import type { Segment } from "@/lib/server/wallets";
 import { enrichEvent } from "@/lib/server/enrich";
 import { sendAlert } from "@/lib/server/alerts";
 import { shortMint } from "@/lib/server/market";
+import { noteIngest } from "@/lib/server/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
   await Promise.allSettled(events.map((e) => enrichEvent(e)));
   const fresh = await addEvents(events);
   await Promise.allSettled(fresh.map((e) => sendAlert(e)));
+  noteIngest("event", fresh.length);
 
   return NextResponse.json({ ok: true, ingested: fresh.length });
 }

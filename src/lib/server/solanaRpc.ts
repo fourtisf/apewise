@@ -281,7 +281,6 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
     if (!sigs || !sigs.length) continue;
 
     const firstSight = !initialized.has(w);
-    initialized.add(w);
     const prevSeen = seen.get(w);
 
     const fresh: SigInfo[] = [];
@@ -318,7 +317,14 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
       const ev = parseRpcSwap(tx, wallet, solPrice);
       if (ev) out.push(ev);
     }
-    if (cursor) seen.set(w, cursor);
+    // Commit first-sight status together with the cursor: if the very first
+    // fetch failed (cursor never set), the wallet stays "first sight" so the
+    // next cycle still uses the tight lookback window instead of silently
+    // widening the backfill to RPC_MAX_AGE_MIN.
+    if (cursor) {
+      seen.set(w, cursor);
+      initialized.add(w);
+    }
   }
 
   const allFailed = calls > 0 && fails >= calls;

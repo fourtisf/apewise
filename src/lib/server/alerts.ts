@@ -219,9 +219,9 @@ const WALLET_COOLDOWN = envNum("ALERT_WALLET_COOLDOWN_SEC", 90) * 1000;
 // 0 disables the floor (post everything).
 const MIN_USD = envNum("ALERT_MIN_USD", 1000);
 
-// Pure check — cooldowns are consumed in sendAlert only AFTER a successful
-// post, so a failed Telegram send doesn't burn the wallet/token cooldown and
-// suppress the next real alert on top of the one that was already lost.
+// Pure check — sendAlert reserves the cooldowns synchronously right after this
+// passes, and rolls the reservation back if the Telegram send fails, so a
+// failed send doesn't burn the cooldown and suppress the next real alert.
 function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   if (ev.risk?.verdict === "risk" && process.env.ALERT_ON_RISK !== "true") {
     return { ok: false, reason: "risk-suppressed" };
@@ -246,12 +246,6 @@ function gate(ev: SmartEvent): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
-function consumeCooldowns(ev: SmartEvent): void {
-  const now = Date.now();
-  lastAlertAt.set(`${ev.wallet}:${ev.tokenMint || ev.token}`, now);
-  lastWalletAt.set(ev.wallet, now);
-}
-
 /** Smart-money alert (tracked-wallet swap via Helius) → signals channel. */
 export async function sendAlert(ev: SmartEvent): Promise<void> {
   const g = gate(ev);
@@ -259,6 +253,20 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     console.log(`[alert] skipped (${g.reason}) ${ev.action} ${ev.token}`);
     return;
   }
+
+  // Reserve the cooldowns SYNCHRONOUSLY, before the first await. The ingest
+  // routes fan a whole batch out with Promise.allSettled, so every gate() in
+  // the batch runs before any send resolves — consuming only after a
+  // successful post would let one wallet's several swaps in a single cycle all
+  // pass the gate (the exact same-wallet spam WALLET_COOLDOWN exists to stop).
+  // A failed send rolls the reservation back below, so a Telegram outage
+  // doesn't ALSO suppress the next real alert.
+  const cdKey = `${ev.wallet}:${ev.tokenMint || ev.token}`;
+  const reservedAt = Date.now();
+  const prevKeyTs = lastAlertAt.get(cdKey);
+  const prevWalletTs = lastWalletAt.get(ev.wallet);
+  lastAlertAt.set(cdKey, reservedAt);
+  lastWalletAt.set(ev.wallet, reservedAt);
 
   const isBuy = ev.action === "buy";
   const amount = fmtUsd(ev.amountUsd);
@@ -305,5 +313,16 @@ export async function sendAlert(ev: SmartEvent): Promise<void> {
     socialLinks(ev.tokenMint, ev.socials),
   ].filter(Boolean) as string[];
 
-  if (await postToChannel(lines.join("\n"))) consumeCooldowns(ev);
+  if (!(await postToChannel(lines.join("\n")))) {
+    // Roll back the reservation — but only if it's still ours (a newer alert's
+    // timestamp must never be clobbered).
+    if (lastAlertAt.get(cdKey) === reservedAt) {
+      if (prevKeyTs == null) lastAlertAt.delete(cdKey);
+      else lastAlertAt.set(cdKey, prevKeyTs);
+    }
+    if (lastWalletAt.get(ev.wallet) === reservedAt) {
+      if (prevWalletTs == null) lastWalletAt.delete(ev.wallet);
+      else lastWalletAt.set(ev.wallet, prevWalletTs);
+    }
+  }
 }

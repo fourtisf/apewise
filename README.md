@@ -267,9 +267,15 @@ running app's `/api/health` verdict.
    now auto-syncs the webhook when `HELIUS_API_KEY`+`WEBHOOK_URL` are set;
    otherwise re-run `node scripts/setup-helius-webhook.mjs` after re-sourcing.
 2. **Public RPC throttling (Mode B)** — `api.mainnet-beta.solana.com`
-   429-blocks VPS IPs; every poll silently returns nothing. Set
-   `SOLANA_RPC_URLS` (comma list) — the poller now rotates endpoints when a
-   whole cycle fails, and `/api/health` reports `rpc-dead`.
+   429-blocks VPS IPs; every poll silently returned nothing. The poller now
+   ships with a keyless failover trio by default, rotates endpoints when a
+   cycle is mostly throttled, widens call spacing adaptively (×2 per bad
+   cycle, up to ×8), and `/api/health` reports `rpc-dead`. If you keep seeing
+   `[rpc-poll] throttled:` lines, put a free **keyed** RPC first in
+   `SOLANA_RPC_URLS` (a Helius/Triton free key gets a far higher limit than
+   any keyless endpoint) and consider `RPC_CALL_DELAY_MS=300`,
+   `RPC_MAX_WALLETS=30`, `RPC_POLL_INTERVAL_SEC=60` to stay under free-tier
+   limits.
 3. **X keys/caps** — regenerated keys, app suspended, tokens created before
    Read+Write, or the **monthly post cap** (free tier ≈ 500 posts/mo — Moby
    mode can burn that in a day or two, then every post 429s until the month

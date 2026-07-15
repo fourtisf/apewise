@@ -143,12 +143,22 @@ export function parseRpcSwap(
   };
 }
 
+// Keyless public endpoints used when the operator configured nothing. Several
+// by default, because mainnet-beta aggressively throttles datacenter/VPS IPs —
+// with a single URL there is nowhere to rotate to and polling starves.
+const DEFAULT_RPCS = [
+  "https://api.mainnet-beta.solana.com",
+  "https://solana-rpc.publicnode.com",
+  "https://solana.drpc.org",
+];
+
 /**
  * RPC endpoints, in preference order. SOLANA_RPC_URLS (comma list) enables
- * automatic failover: when a whole poll cycle fails (public mainnet-beta
- * aggressively 429s datacenter IPs — the classic way this pipeline silently
- * dies), we rotate to the next endpoint instead of returning [] forever.
- * Falls back to SOLANA_RPC_URL, then the public endpoint.
+ * automatic failover: when a poll cycle is mostly throttled (public
+ * mainnet-beta aggressively 429s datacenter IPs — the classic way this
+ * pipeline silently dies), we rotate to the next endpoint instead of
+ * returning [] forever. SOLANA_RPC_URL pins a single endpoint (no rotation);
+ * with neither set, a built-in keyless trio is used.
  */
 function rpcUrls(): string[] {
   const multi = (process.env.SOLANA_RPC_URLS || "")
@@ -156,10 +166,13 @@ function rpcUrls(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   if (multi.length) return multi;
-  return [process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com"];
+  if (process.env.SOLANA_RPC_URL) return [process.env.SOLANA_RPC_URL];
+  return DEFAULT_RPCS;
 }
 
 let rpcIdx = 0;
+// Grows ×2 per throttled cycle (fail ratio > 25%), shrinks ÷2 per clean cycle.
+let throttleMultiplier = 1;
 
 /** Read fresh each call so the active RPC always reflects current env. */
 export function activeRpcUrl(): string {
@@ -247,7 +260,11 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
 
   const { getSolPriceUsd } = await import("./market");
   const solPrice = await getSolPriceUsd();
-  const callDelay = Number(process.env.RPC_CALL_DELAY_MS) || 150;
+  // Adaptive spacing: while the endpoint throttles us, widen the gap between
+  // calls (up to 8×) instead of hammering at full speed — hammering keeps the
+  // IP throttled forever. A clean cycle narrows it back down.
+  const callDelay =
+    (Number(process.env.RPC_CALL_DELAY_MS) || 150) * throttleMultiplier;
   const perWallet = Math.min(Number(process.env.RPC_SIGS_PER_WALLET) || 10, 25);
   const maxAgeMs = (Number(process.env.RPC_MAX_AGE_MIN) || 120) * 60_000;
   // On first sight of a wallet (incl. after every app restart) look back a short
@@ -327,11 +344,17 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
     }
   }
 
-  const allFailed = calls > 0 && fails >= calls;
-  if (allFailed) {
+  // Throttle response — ONE aggregated line per bad cycle (never per wallet):
+  // fail ratio > 25% widens the call spacing; > 50% also rotates endpoints.
+  const failRatio = calls > 0 ? fails / calls : 0;
+  if (failRatio > 0.25) {
+    throttleMultiplier = Math.min(throttleMultiplier * 2, 8);
     console.warn(
-      `[rpc-poll] every RPC call failed this cycle (${fails}/${calls} via ${activeRpcUrl()}) — throttled or down`,
+      `[rpc-poll] throttled: ${fails}/${calls} calls failed via ${activeRpcUrl()} — ` +
+        `spacing ×${throttleMultiplier}${failRatio >= 0.5 ? ", rotating endpoint" : ""}`,
     );
+  } else if (calls > 0 && fails === 0 && throttleMultiplier > 1) {
+    throttleMultiplier = Math.max(1, Math.floor(throttleMultiplier / 2));
   }
   // Heartbeat for /api/health (dynamic import keeps the pure parser testable
   // under node --test, same as ./wallets and ./market above). Fail-soft.
@@ -342,7 +365,7 @@ export async function pollTrackedWallets(): Promise<SmartEvent[]> {
   } catch {
     /* health module unavailable (unit tests) */
   }
-  if (allFailed) rotateRpc();
+  if (failRatio >= 0.5) rotateRpc();
 
   return out;
 }

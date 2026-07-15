@@ -179,20 +179,24 @@ for (const w of manual) if (w?.address) trackedMap.set(w.address, w);
 const tracked = [...trackedMap.values()];
 const accountAddresses = tracked.map((w) => w.address);
 
+// Validate BEFORE overwriting: a run where every source failed must not wipe
+// the existing tracked-wallets.json (the walletMap baseline) with an empty
+// array — that alone silences both channels.
+if (accountAddresses.length === 0) {
+  console.error(
+    "No wallet addresses to track. Auto-source failed (Birdeye + GMGN) and no " +
+      `manual list found at ${walletsFile}. Create it with real addresses:\n` +
+      '  [{ "address": "...", "label": "Whale 1", "segment": "smart" }]\n' +
+      "Keeping the existing data/tracked-wallets.json untouched.",
+  );
+  process.exit(1);
+}
+
 try {
   await writeFile("data/tracked-wallets.json", JSON.stringify(tracked, null, 2));
   console.log(`Wrote data/tracked-wallets.json (${tracked.length} wallets)`);
 } catch (e) {
   console.warn("Could not write data/tracked-wallets.json:", e.message);
-}
-
-if (accountAddresses.length === 0) {
-  console.error(
-    "No wallet addresses to track. Auto-source failed (Birdeye + GMGN) and no " +
-      `manual list found at ${walletsFile}. Create it with real addresses:\n` +
-      '  [{ "address": "...", "label": "Whale 1", "segment": "smart" }]',
-  );
-  process.exit(1);
 }
 
 const body = {

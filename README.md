@@ -275,7 +275,14 @@ running app's `/api/health` verdict.
    `SOLANA_RPC_URLS` (a Helius/Triton free key gets a far higher limit than
    any keyless endpoint) and consider `RPC_CALL_DELAY_MS=300`,
    `RPC_MAX_WALLETS=30`, `RPC_POLL_INTERVAL_SEC=60` to stay under free-tier
-   limits.
+   limits. For the biggest headroom run the bundled **RPC proxy**
+   (`scripts/rpc-proxy.mjs`): it aggregates several upstreams behind one
+   local endpoint, caches immutable `getTransaction` results forever and
+   benches 429'd upstreams —
+   `pm2 start scripts/rpc-proxy.mjs --name apewise-rpcproxy`, then
+   `SOLANA_RPC_URL=http://127.0.0.1:8787`. (Running an actual Solana RPC
+   node needs 512GB+ RAM / NVMe / ~$500+ per month — not worth it for
+   tracked-wallet polling.)
 3. **X keys/caps** — regenerated keys, app suspended, tokens created before
    Read+Write, or the **monthly post cap** (free tier ≈ 500 posts/mo — Moby
    mode can burn that in a day or two, then every post 429s until the month

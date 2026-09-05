@@ -155,6 +155,30 @@ A one-shot redeploy script is included as [`deploy.sh`](./deploy.sh):
 ./deploy.sh        # git pull → npm ci → npm run build → pm2 reload apewise
 ```
 
+### Teardown
+
+The inverse of `deploy.sh` — takes ApeWise offline and off the server, in the
+only order that works. See [`teardown.sh`](./teardown.sh):
+
+```bash
+./teardown.sh              # DRY RUN — prints the plan, changes nothing
+./teardown.sh --yes        # execute
+./teardown.sh --yes --keep-files   # PM2 + Nginx only, leave the directory
+```
+
+It backs up `.env`, `data/` and the server-only worker scripts to
+`~/apewise-backup-<stamp>.tar.gz` (plus the PM2 dump) *before* removing anything,
+stops `apewise-watchdog` first — it restarts the app, so anything deleted ahead of
+it comes straight back — then removes every `apewise-*` process, runs `pm2 save`
+so a reboot's `pm2 resurrect` cannot revive them, disables the Nginx vhost so the
+domain stops serving a 502, and finally deletes the app directory. Process names
+come from `pm2 jlist` filtered to `apewise` / `apewise-*`, so unrelated processes
+on the same box are never touched.
+
+> Two things live outside the server and survive teardown: the **Helius webhook**
+> keeps POSTing to this host until you delete it in the Helius dashboard, and the
+> **Telegram / X tokens** stay valid — revoke them if the project is retired.
+
 ---
 
 ## MVP — smart-money engine (Solana via Helius)

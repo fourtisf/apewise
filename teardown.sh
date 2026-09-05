@@ -93,6 +93,15 @@ APP_DIR="$(read_pm2 '
   });')"
 APP_DIR="${APP_DIR:-/var/www/apewise}"
 
+APP_PORT="$(read_pm2 '
+  let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+    const i = s.indexOf("["); if (i < 0) return;
+    let list = []; try { list = JSON.parse(s.slice(i)); } catch { return; }
+    const app = list.find(p => p.name === "apewise");
+    console.log((app && app.pm2_env && app.pm2_env.env && app.pm2_env.env.PORT) || "");
+  });')"
+APP_PORT="${APP_PORT:-3000}"
+
 if [ -z "$PROCS" ]; then
   warn "No apewise-* processes are registered with PM2 (already removed?)."
 else
@@ -176,16 +185,35 @@ fi
 
 # ── 4. Nginx vhost — otherwise the domain serves a 502 forever ───────────────
 if [ "$KEEP_NGINX" -eq 0 ] && command -v nginx >/dev/null 2>&1; then
-  if [ -e /etc/nginx/sites-enabled/apewise ]; then
-    say "Disabling the Nginx vhost"
-    run rm -f /etc/nginx/sites-enabled/apewise
+  say "Nginx vhost (proxying to :${APP_PORT})"
+  # The vhost is rarely named after the app, so match on what it *does* — a
+  # proxy_pass to this app's port — rather than on its filename.
+  VHOSTS="$(grep -RlE "proxy_pass[[:space:]]+https?://(127\.0\.0\.1|localhost|\[::1\]):${APP_PORT}\b" \
+    /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | sort -u || true)"
+  COUNT="$(printf '%s' "$VHOSTS" | grep -c . || true)"
+
+  if [ "$COUNT" -eq 0 ]; then
+    warn "No enabled vhost proxies to :${APP_PORT} — nothing to disable."
+  elif [ "$COUNT" -gt 1 ]; then
+    printf '%s\n' "$VHOSTS" | sed 's/^/   /'
+    warn "More than one vhost proxies to :${APP_PORT}. Too ambiguous to touch —"
+    warn "disable the right one by hand, then: nginx -t && systemctl reload nginx"
+  else
+    echo "   $VHOSTS"
+    run cp -L "$VHOSTS" "${BACKUP_DIR}/apewise-vhost-${STAMP}.conf"
+    if [ -L "$VHOSTS" ]; then
+      # sites-enabled entry: dropping the symlink leaves sites-available intact.
+      run rm -f "$VHOSTS"
+    else
+      # A real file (typically conf.d/*.conf): rename so nginx stops including
+      # it, rather than deleting a config we did not write.
+      run mv "$VHOSTS" "${VHOSTS}.disabled"
+    fi
     if [ "$DRY" -eq 1 ]; then
       printf '   \033[2mwould run:\033[0m nginx -t && systemctl reload nginx\n'
     else
-      nginx -t && systemctl reload nginx
+      nginx -t && systemctl reload nginx && ok "Nginx reloaded."
     fi
-  else
-    warn "No /etc/nginx/sites-enabled/apewise symlink — check your vhost name manually."
   fi
 fi
 

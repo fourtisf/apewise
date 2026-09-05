@@ -54,6 +54,17 @@ run() {
   fi
 }
 
+# Same as run(), but a non-zero exit is reported instead of aborting: one
+# process that is already gone must never leave the teardown half-finished.
+run_soft() {
+  if [ "$DRY" -eq 1 ]; then
+    printf '   \033[2mwould run:\033[0m %s\n' "$*"
+  else
+    printf '   %s\n' "$*"
+    "$@" || warn "'$*' exited non-zero — continuing."
+  fi
+}
+
 command -v pm2 >/dev/null 2>&1 || { echo "pm2 not found in PATH — run this on the VPS as the user that owns the PM2 daemon." >&2; exit 1; }
 
 # ── Discover what we are about to remove ─────────────────────────────────────
@@ -92,6 +103,24 @@ fi
 say "App directory"
 echo "   $APP_DIR $([ -d "$APP_DIR" ] || echo '(not present)')"
 
+# A deploy checkout that has drifted from its remote holds commits that exist
+# nowhere else. They ride along in the backup (.git is included), but say so
+# out loud before anything is deleted.
+if [ -d "$APP_DIR/.git" ]; then
+  UNPUSHED="$(git -C "$APP_DIR" log --oneline --all --not --remotes 2>/dev/null || true)"
+  if [ -n "$UNPUSHED" ]; then
+    say "Commits on this server that are not on any remote"
+    printf '%s\n' "$UNPUSHED" | sed 's/^/   /'
+    warn "These exist only here. They are captured in the backup below (.git is"
+    warn "included); push them first if you want them on GitHub."
+  fi
+  DIRTY="$(git -C "$APP_DIR" status --porcelain 2>/dev/null || true)"
+  if [ -n "$DIRTY" ]; then
+    warn "Uncommitted changes in $APP_DIR (also captured in the backup):"
+    printf '%s\n' "$DIRTY" | sed 's/^/   /'
+  fi
+fi
+
 if [ "$DRY" -eq 1 ]; then
   warn "DRY RUN — nothing below is executed. Re-run with --yes to apply."
 fi
@@ -104,11 +133,12 @@ BACKUP="${BACKUP_DIR}/apewise-backup-${STAMP}.tar.gz"
 say "Backing up to ${BACKUP}"
 if [ -d "$APP_DIR" ]; then
   # Everything irreplaceable: .env (Helius/Telegram/Twitter keys, INGEST_SECRET),
-  # data/ (waitlist.jsonl, smart-wallets.json) and the server-only worker scripts
-  # (watchdog, rpcproxy) that were never committed to the repo.
-  # node_modules/.next/.git are all reproducible — excluded to keep it small.
+  # data/ (waitlist.jsonl, smart-wallets.json), the server-only worker scripts
+  # (watchdog, rpcproxy) that were never committed, and .git — a deploy checkout
+  # routinely carries commits that were never pushed anywhere, and it is only a
+  # few MB. node_modules/.next are reproducible from the lockfile — excluded.
   run tar czf "$BACKUP" \
-    --exclude='node_modules' --exclude='.next' --exclude='.git' \
+    --exclude='node_modules' --exclude='.next' \
     -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
 else
   warn "$APP_DIR does not exist — skipping directory backup."
@@ -128,7 +158,7 @@ fi
 # ── 2. Watchdog first, or it undoes everything that follows ──────────────────
 if printf '%s\n' "$PROCS" | grep -qx 'apewise-watchdog'; then
   say "Stopping the watchdog first (it restarts the app otherwise)"
-  run pm2 delete apewise-watchdog
+  run_soft pm2 delete apewise-watchdog
 fi
 
 # ── 3. Remove the remaining apewise-* processes, then persist ────────────────
@@ -136,8 +166,8 @@ if [ -n "$PROCS" ]; then
   say "Removing the remaining apewise processes"
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    [ "$name" = "apewise-watchdog" ] && continue
-    run pm2 delete "$name"
+    if [ "$name" = "apewise-watchdog" ]; then continue; fi
+    run_soft pm2 delete "$name"
   done <<< "$PROCS"
 
   say "Persisting PM2 state (so a reboot cannot resurrect them)"

@@ -65,6 +65,8 @@ run_soft() {
   fi
 }
 
+INVOKED_FROM="$PWD"
+
 command -v pm2 >/dev/null 2>&1 || { echo "pm2 not found in PATH — run this on the VPS as the user that owns the PM2 daemon." >&2; exit 1; }
 
 # ── Discover what we are about to remove ─────────────────────────────────────
@@ -226,6 +228,10 @@ elif [ -d "$APP_DIR" ]; then
     /|/root|/home|/var|/var/www|/usr|/etc)
       echo "Refusing to delete a system directory: $APP_DIR" >&2; exit 1 ;;
   esac
+  # Step out of the tree first. Unlinking the process's own cwd leaves every
+  # command that follows resolving a dead inode — Node dies outright on it
+  # (ENOENT: uv_cwd), so the verification below would take pm2 with it.
+  cd /
   run rm -rf "$APP_DIR"
 fi
 
@@ -251,6 +257,11 @@ fi
 [ -d "$APP_DIR" ] && warn "$APP_DIR still exists." || ok "$APP_DIR removed."
 echo
 ok "Backup kept at: $BACKUP"
+case "$INVOKED_FROM" in
+  "$APP_DIR"|"$APP_DIR"/*)
+    warn "Your shell is still in the directory that was just deleted. Run 'cd ~'"
+    warn "before the next command, or pm2/node will fail with ENOENT: uv_cwd." ;;
+esac
 warn "Loose ends to close outside this server: the Helius webhook still POSTs to"
 warn "this host (delete it in the Helius dashboard), and the Telegram/X bot tokens"
 warn "in the backup remain valid — revoke them if ApeWise is retired for good."
